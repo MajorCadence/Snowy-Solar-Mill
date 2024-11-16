@@ -1,0 +1,6 @@
+[submodule "Gamepad2"]
+	path = Gamepad2
+	url = https://github.com/piborg/Gamepad
+[submodule "Gamepad-Lib"]
+	path = Gamepad-Lib
+	url = https://github.com/piborg/Gamepad
