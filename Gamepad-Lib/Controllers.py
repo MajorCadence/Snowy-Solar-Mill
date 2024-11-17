@@ -383,19 +383,19 @@ class Custom_Nintendo(Gamepad):
 
         }
         self.buttonNames = {
-            0: 'B',
-            1: 'A',
-            2: 'X',
-            3: 'Y',
-            4: 'Start/Exit',
-            5: 'LB',
-            6: 'RB',
-            7: 'LT',
-            8: 'RT',
-            9: 'Minus',
-            10: 'Plus',
-            11: 'Home',
-            12: 'L Stick Press',
-            13: 'R Stick Press'
+            0: 'Y',
+            1: 'B',
+            2: 'A',
+            3: 'X',
+            4: 'LB',
+            5: 'RB',
+            6: 'LT',
+            7: 'RT',
+            8: 'Minus',
+            9: 'Plus',
+            12: 'Home',
+            10: 'L Stick Press',
+            11: 'R Stick Press',
+            13: 'Start/Exit',
         }
         self._setupReverseMaps()

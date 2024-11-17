@@ -23,6 +23,7 @@ def main():
     # This is a basic CLI implementation
     while True:
         try:
+            reset_gpios()
             print("[1] Control Stepper Motor")
             print("[2] Quit")
             user_input = input("Please enter selection : ")
@@ -56,8 +57,12 @@ def stepper(steps, direction, rpm):
 
     counterclockwise = int(direction)
 
-    num1 = 0x1
-    num2 = 0x3  
+    if counterclockwise:
+        num1 = 0x3
+        num2 = 0x1
+    else:
+        num1 = 0x1
+        num2 = 0x3  
 
     period = 0.01
     freq = 1/period
@@ -108,4 +113,12 @@ def debug(*message):
         for msg in message:
             print(msg)
 
-main()
+def reset_gpios():
+    gpio.output(ain1, 0)
+    gpio.output(bin2, 0)
+    gpio.output(ain2, 0)
+    gpio.output(bin1, 0)
+
+
+if __name__ == "__main__":
+    main()
