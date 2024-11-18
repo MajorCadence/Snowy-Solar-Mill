@@ -59,11 +59,11 @@ def stepper(steps, direction, rpm):
 
     if counterclockwise:
         num1 = 0x3
-        num2 = 0x1
+        num2 = 0x1  
     else:
         num1 = 0x1
-        num2 = 0x3  
-
+        num2 = 0x3
+    
     period = 0.01
     freq = 1/period
     rev_amount = 2
@@ -86,8 +86,9 @@ def stepper(steps, direction, rpm):
             gpio.output(ain2, a2)
             gpio.output(bin1, b2)
 
-            debug((a1,b1,a2,b2))
-            
+            debug(("A1 A2 B2 B1"))
+            debug((a1,a2,b2,b1))
+            #input()
             sleep(pause_time)
         
             num2 = toggle2(counterclockwise, num2)
@@ -100,9 +101,9 @@ def stepper(steps, direction, rpm):
             gpio.output(ain2, a2)
             gpio.output(bin1, b2)
         
-            
-            debug((a1,b1,a2,b2))
-            
+            debug(("A1 A2 B2 B1"))
+            debug((a1,a2,b2,b1))
+            #input()
             sleep(pause_time)
         
         
