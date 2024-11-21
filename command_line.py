@@ -59,14 +59,14 @@ def main():
 
 def four_bit_rotation(direction, num1): # this code does a bit shift (bit rotation) in a particular direction for a 4-bit number
     
-    if direction: # if the direction is right (==1)
+    if direction: # if the direction of the bit rotation is right (==1)
         return (2**4-1)&(num1>>1|num1<<(4-1)) 
             # shift the number to the right one bit, and also calculate the number left shifted three bits
             # OR the results together
             # (the ensures that the number is right-shifted one bit, but also that bit 0 becomes the new bit 3)
             # take only the lower four bits by ANDing with 0xF, ending up with an overall one bit rotation to the right
     
-    else: # if the direction is left (==0)
+    else: # if the direction of the bit rotation is left (==0)
         return (2**4-1)&(num1<<1|num1>>(4-1))
             # shift the number to the left one bit, and also calculate the number right shifted three bits
             # OR the results together
@@ -75,9 +75,9 @@ def four_bit_rotation(direction, num1): # this code does a bit shift (bit rotati
 
 def stepper(steps, direction, rpm): # this is the main motor rotation function
 
-    counterclockwise = int(direction) # convert string to int representing the direction
+    clockwise = int(direction) # convert string to int representing the direction
 
-    if counterclockwise: # if the direction ends up being counterclockwise, start with the first two rows of the truth table
+    if clockwise: # if the direction ends up being clockwise, start with the first two rows of the truth table
         rowQ = 0x3
         rowR = 0x1
         # 0 0 1 1
@@ -99,7 +99,7 @@ def stepper(steps, direction, rpm): # this is the main motor rotation function
 
     for i in range(total_steps): # loop for the total amount of steps
         try:
-            rowQ = four_bit_rotation(counterclockwise, rowQ) # bit rotate row-Q to get the next odd row (row-Q + 2)
+            rowQ = four_bit_rotation(clockwise, rowQ) # bit rotate row-Q to get the next odd row (row-Q + 2)
             
             a1 = rowQ >> 3 & 1  # grab bit 3 and assign it to a1
             b1 = rowQ >> 2 & 1  # grab bit 2 and assign it to b1
@@ -119,7 +119,7 @@ def stepper(steps, direction, rpm): # this is the main motor rotation function
 
             sleep(pause_time) # pause for the calculated amount of time
         
-            rowR = four_bit_rotation(counterclockwise, rowR) # bit rotate row-R to get the next even row (row-R + 2)
+            rowR = four_bit_rotation(clockwise, rowR) # bit rotate row-R to get the next even row (row-R + 2)
             
             a1 = rowR >> 3 & 1  # grab bit 3 and assign it to a1
             b1 = rowR >> 2 & 1  # grab bit 2 and assign it to b1
