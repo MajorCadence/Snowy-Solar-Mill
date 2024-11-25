@@ -374,12 +374,12 @@ class Custom_Nintendo(Gamepad):
     def __init__(self, joystickNumber = 0):
         Gamepad.__init__(self, joystickNumber)
         self.axisNames = {
-            0: 'LAS X axis', #Left Analog Stick Left/Right
-            1: 'LAS Y axis', #Left Analog Stick Up/Down
-            2: 'RAS X axis', #Right Analog Stick Left/Right
-            3: 'RAS Y axis', #Right Analog Stick Up/Down
-            4: 'DPAD X axis', #D-Pad Left/Right
-            5: 'DPAD Y axis', #D-Pad Up/Dow
+            0: 'LAS_X_Axis', #Left Analog Stick Left/Right
+            1: 'LAS_Y_Axis', #Left Analog Stick Up/Down
+            2: 'RAS_X_Axis', #Right Analog Stick Left/Right
+            3: 'RAS_Y_Axis', #Right Analog Stick Up/Down
+            4: 'DPAD_X_Axis', #D-Pad Left/Right
+            5: 'DPAD_Y_Axis', #D-Pad Up/Dow
 
         }
         self.buttonNames = {
@@ -394,8 +394,8 @@ class Custom_Nintendo(Gamepad):
             8: 'Minus', # Minus Button
             9: 'Plus', # Plus Button
             12: 'Home', # Home Button
-            10: 'L Stick Press', # Pressing the Left Stick Down
-            11: 'R Stick Press', # Pressing the Right Stick Down
+            10: 'L_Stick_Press', # Pressing the Left Stick Down
+            11: 'R_Stick_Press', # Pressing the Right Stick Down
             13: 'Start/Exit', # Start / Exit Button
         }
         self._setupReverseMaps()
