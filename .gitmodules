@@ -1,0 +1,3 @@
+[submodule "project-keyword-spotter"]
+	path = project-keyword-spotter
+	url = https://github.com/WaveformAI/project-keyword-spotter
