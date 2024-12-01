@@ -1,13 +1,27 @@
-# Yuletide Twister Rev 1.002
+# Yuletide Twister Rev 1.013
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
+#TO-DO: add code to play music tracks asyncronously (possibly from beeper speaker over PWM pins?)
+#       add code to cycle light shows asyncronously
+
+import numpy as np # import numpy for processing
 import RPi.GPIO as gpio # import the RPi.GPIO python library
+import argparse # import argparse for pasring command line-arguments (partially set by this code)
 from time import sleep # import the sleep function so we can sleep
-import sys # import sys for additional libraries
+import sys # import sys for importing additional libraries
 import math # import for math functions
+import threading # import for multithreading
+from os import system # import system call for various uses
+#import faulthandler # import for debugging segfaults
 sys.path.insert(0, './Gamepad-Lib') # add the Piborg Gamepad library to the sys path
+sys.path.insert(1, './project-keyword-spotter') # add the project-keyword-spotter to the sys path
 import Gamepad # import the Piborg Gamepad library
+import windmill_voice_recognition as KeywordModel # import the project-keyword-spotter library main call function
+
+
+# the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
+path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
@@ -47,6 +61,8 @@ light_show = 1 # Start with the light show set to #1
 music_enabled = False # Start with the music disabled
 music_track = 1 # The music track will be set to the first track
 microphone_enabled = False # Start with the microphone disabled
+previous_keywords = ['', '', '', '', ''] # A buffer of previous detected keywords (default set to empty)
+
 
 # The code is for rotating with half steps
 
@@ -157,7 +173,20 @@ def stepper(): # this is the main motor rotation function, that loops
             temp = rowQ
             rowQ = rowR
             rowR = temp
+
+
+def setup_Coral(): # this function initializes the Coral TPU accelerator and loads it with the keyword detection model's tensorflow file
     
+    parser = argparse.ArgumentParser() # instantiate a new command line argument parser
+    KeywordModel.add_model_flags(parser) # define arguments to look for and their default values
+    
+    # parse arguemnts; override the default path of the model file relative to the current directory
+    args = parser.parse_args(['--model_file', './project-keyword-spotter/models/voice_commands_v0.7_edgetpu.tflite']) 
+    interpreter = KeywordModel.make_interpreter(args.model_file) # initialize a new Coral interpreter
+    interpreter.allocate_tensors() # allocte memory on the TPU for the tensors
+    mic = args.mic if args.mic is None else int(args.mic) # possible override for the default microphone (not used; args.mic = None)
+
+    return args, interpreter, mic # return the argument parser structure, and object of the interpreter, and the microphone ID number to use
 
 def wait_for_connection(gamepadType): # this function waits for a controller to be connected and then returns a gamepad object that will be used to interface with the controller
 
@@ -185,57 +214,99 @@ def setup_GPIOS(): # this function sets up the GPIO pins as outputs with their c
     return ain1, ain2, bin1, bin2
 
 
-def debug(*message): # print debug messages if debug enabled
+def debug(*messages): # print debug messages if debug enabled
+
+    # This code prints all iterable messages in the container
     if is_debug:
-        for msg in message:
+        for msg in messages:
             print(msg)
 
 def debug_pause(): # pause for user press key if debug enabled
+
     if is_debug:
         input()
 
 def reset_gpios(): # write all zeros to the state of the current GPIO outputs, clearing them
+
     gpio.output(ain1, 0)
     gpio.output(bin2, 0)
     gpio.output(ain2, 0)
     gpio.output(bin1, 0)
 
-def speedDirectionAxisMoved(new_position: int): # The callback function for the speed/direction stick moving
+def soft_power_off(): # called by the keyword parser for device power off
 
-    global new_direction # Use the global variable
-    print(f"Speed control updated | New RPM {abs(new_position)*max_rpm_limit_stick_mode}")
-    calculate_motor_time_step_from_RPM(abs(new_position)*max_rpm_limit_stick_mode) # Calculate the new time step from the RPM limit multiplied by the absolute value of stick position (ranging from 0 to 1)
-    
-    if new_position != 0: # If the stick is not in the center position
-    
-        if new_position == abs(new_position): # If the stick position is positive, then our direction is counter-clockwise
-        
-            new_direction = 0 # update the global new_direction variable
-            print(f"Direction control updated | Rotation clockwise")
-            
-        else: # otherwise, the stick position must be negative
-        
-            new_direction = 1 # set the new_direction to be clockwise
-            print(f"Direction control updated | Rotation counter-clockwise")
+    global running # Use the global variable
+    running = False # set the boolean determining power state to False
+
+def soft_power_on(): # called by the keyword parser for device power on
+
+    global running # Use the global variable
+    running = True # set the boolean determining power state to False
+
+def mute(): #called by the keyword parser for disabling the music
+
+    global music_enabled # Use the global variable
+    music_enabled = True # set the boolean determining music to be True
+    musicToggle() # Then, enter the callback which will toggle it to False
+
+def unmute(): #called by the keyword parser for enabling the music
+
+    global music_enabled # Use the global variable
+    music_enabled = False # set the boolean determining music to be False
+    musicToggle() # Then, enter the callback which will toggle it to True
+
+def lights_on(): # called by the keyword parser for enabling the light shows
+
+    global light_show_enabled # Use the global variable
+    light_show_enabled = False # set the boolean determining light show enable to be False
+    lightShowToggle() # Then, enter the callback which will toggle it to True
+
+def lights_off(): # called by the keyword parser for disabling the light shows
+
+    global light_show_enabled # Use the global variable
+    light_show_enabled = True # set the boolean determining light show enable to be True
+    lightShowToggle() # Then, enter the callback which will toggle it to False
 
 def exitButtonPressed(): # The callback function for the exit button press
 
     global running # Use the global variable
     running = running ^ 1 # toggle the boolean for running using XOR
 
+def speedDirectionAxisMoved(new_position: int): # The callback function for the speed/direction stick moving
+
+    global new_direction # Use the global variable
+    if toggleMode: # Sanity check that the current control mode is stick control
+        print(f"Speed control updated | New RPM {abs(new_position)*max_rpm_limit_stick_mode}")
+        calculate_motor_time_step_from_RPM(abs(new_position)*max_rpm_limit_stick_mode) # Calculate the new time step from the RPM limit multiplied by the absolute value of stick position (ranging from 0 to 1)
+        
+        if new_position != 0: # If the stick is not in the center position
+        
+            if new_position == abs(new_position): # If the stick position is positive, then our direction is counter-clockwise
+            
+                new_direction = 0 # update the global new_direction variable
+                print(f"Direction control updated | Rotation clockwise")
+                
+            else: # otherwise, the stick position must be negative
+            
+                new_direction = 1 # set the new_direction to be clockwise
+                print(f"Direction control updated | Rotation counter-clockwise")
+
+
 def toggleControlButtonPressed(): # The callback function for the control mode toggle switch
 
     global toggleMode # Use the global variable
-    if not toggleMode: # If the toggle_mode is previously 0, remove all handlers for the D-PAD control, and add the handler for stick control
+
+    toggleMode = toggleMode ^ 0b1 # toggle the control mode boolean 'toggleMode' using XOR
+    if toggleMode: # If the toggle_mode is now 1 (i.e. stick control), remove all handlers for the D-PAD control, and add the handler for stick control
     
         controller.removeAxisMovedHandler(speedAxis, speedAxisMoved)
         controller.removeAxisMovedHandler(directionAxis, directionAxisMoved)
         controller.addAxisMovedHandler(speedDirectionStick, speedDirectionAxisMoved)
         
-        speedDirectionAxisMoved(0) # reset the speed to zero by directly calling the callack for stick control passing in a value for a centered stick
+        speedDirectionAxisMoved(0) # reset the speed to zero by directly calling the callback for stick control passing in a value for a centered stick
         print("Toggling control mode | Stick control")
         
-    else: # Otherwise, if the toggle_mode is previously 1, remove the handler for stick control, and add the handlers for D-PAD control
+    else: # Otherwise, if the toggle_mode is now 0 (i.e. D-PAD control), remove the handler for stick control, and add the handlers for D-PAD control
     
         controller.removeAxisMovedHandler(speedDirectionStick, speedDirectionAxisMoved)
         controller.addAxisMovedHandler(speedAxis, speedAxisMoved)
@@ -244,72 +315,75 @@ def toggleControlButtonPressed(): # The callback function for the control mode t
         calculate_motor_time_step_from_RPM(0.5*max_rpm_limit_step_mode) # reset the speed by directly calculating a new timestep from an RPM of half the maximum for step mode
         print("Toggling control mode | D-PAD control")
         
-        
-    toggleMode = toggleMode ^ 0b1 # after switching the mode, also toggle the variable toggleMode using XOR
 
 def speedAxisMoved(change: int): # The callback function for the speed axis (D-PAD mode)
 
     global pause_time # Use the global variable
-    if change < 0: # If the value is negative (D-PAD up)
-    
-        pause_time /= 1.3 # divide the current pause_time (increase speed) by 1.3 (arbitrary value)
-        calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
+    if not toggleMode: # sanity check that the current control mode is D-PAD control
+        if change < 0: # If the value is negative (D-PAD up)
         
-        if RPM > max_rpm_limit_step_mode: # if the RPM is now above our maximum limits
-            pause_time *= 1.3 # then revert it
-            calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
+            pause_time /= 1.3 # divide the current pause_time (increase speed) by 1.3 (arbitrary value)
+            calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
             
-        print(f"Speed inreased | New RPM {RPM}")
-        
-    elif change > 0: # Otherwise, if the value is positive (D-PAD down)
-    
-        pause_time *= 1.3 # multiply the current pause_time (decrease speed) by 1.3 (arbitrary value)
-        calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
-        
-        if RPM < 1: # if the RPM is now below that previously imposed maximum pause_time value of 1 (at "0" RPM)
-            pause_time /= 1.3 # then revert it; we don't want it too slow or the program will feel sluggish to respond
-            calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
+            if RPM > max_rpm_limit_step_mode: # if the RPM is now above our maximum limits
+                pause_time *= 1.3 # then revert it
+                calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
+                
+            print(f"Speed inreased | New RPM {RPM}")
             
-        print(f"Speed decreased | New RPM {RPM}")
+        elif change > 0: # Otherwise, if the value is positive (D-PAD down)
+        
+            pause_time *= 1.3 # multiply the current pause_time (decrease speed) by 1.3 (arbitrary value)
+            calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
+            
+            if RPM < 1: # if the RPM is now below that previously imposed maximum pause_time value of 1 (at "0" RPM)
+                pause_time /= 1.3 # then revert it; we don't want it too slow or the program will feel sluggish to respond
+                calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
+                
+            print(f"Speed decreased | New RPM {RPM}")
 
 
 def directionAxisMoved(change: int): # The callback function for the speed axis (D-PAD mode)
 
     global new_direction # Use the global variable
-    
-    if change > 0: # If the value is positive (D-PAD) right
-    
-        new_direction = 1 # rotate clockwise
-        print("Direction set to clockwise")
+    if not toggleMode: # sanity check that the current control mode is D-PAD control
+        if change > 0: # If the value is positive (D-PAD) right
         
-    elif change < 0: # Otherwise, if the value is negative (D-PAD) left
-    
-        new_direction = 0 # rotate counter-clockwise
-        print("Direction set to counter-clockwise")
+            new_direction = 1 # rotate clockwise
+            print("Direction set to clockwise")
+            
+        elif change < 0: # Otherwise, if the value is negative (D-PAD) left
+        
+            new_direction = 0 # rotate counter-clockwise
+            print("Direction set to counter-clockwise")
 
 def lightShow1Selected(): # The callback function for selecting light show #1
-
+    
     global light_show # Use the global variable
-    print('Light show 1 selected')
-    light_show = 1
+    if light_show_enabled: # sanity check that the light show is actually enabled
+        print('Light show 1 selected')
+        light_show = 1 # set the light show number to 1
 
 def lightShow2Selected(): # The callback function for selecting light show #2
 
     global light_show # Use the global variable
-    print('Light show 2 selected')
-    light_show = 2
+    if light_show_enabled: # sanity check that the light show is actually enabled
+        print('Light show 2 selected')
+        light_show = 2 # set the light show number to 2
 
 def lightShow3Selected(): # The callback function for selecting light show #3
 
     global light_show # Use the global variable
-    print('Light show 3 selected')
-    light_show = 3
+    if light_show_enabled: # sanity check that the light show is actually enabled
+        print('Light show 3 selected')
+        light_show = 3 # set the light show number to 3
 
 def lightShow4Selected(): # The callback function for selecting light show #4
 
     global light_show # Use the global variable
-    print('Light show 4 selected')
-    light_show = 4
+    if light_show_enabled: # sanity check that the light show is actually enabled
+        print('Light show 4 selected')
+        light_show = 4 # set the light show number to 4
 
 def lightShowToggle(): # The callback function for enabling/disabling the light show
 
@@ -352,17 +426,17 @@ def musicToggle(): # The callback function for toggling the music
 def musicTrackUp(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
-    
-    music_track = ((music_track) % 8) + 1 # If music track goes outside the bounds of 1-8, mod 8 and add 1 to fix
-    print(f"Music track up | Now playing track {music_track}")
+    if music_enabled: # sanity check that the music is actually enabled
+        music_track = ((music_track) % 8) + 1 # If music track goes outside the bounds of 1-8, mod 8 and add 1 to fix
+        print(f"Music track up | Now playing track {music_track}")
 
 
 def musicTrackDown(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
-    
-    music_track = ((music_track - 2) % 8) + 1 # If music track goes outside the bounds of 1-8, subtract 2, mod 8 and add 1 to fix
-    print(f"Music track down | Now playing track {music_track}")
+    if music_enabled: # sanity check that the music is actually enabled
+        music_track = ((music_track - 2) % 8) + 1 # If music track goes outside the bounds of 1-8, subtract 2, mod 8 and add 1 to fix
+        print(f"Music track down | Now playing track {music_track}")
 
 
 def microphoneEnabled(): # The callback function for enabling voice control
@@ -371,47 +445,184 @@ def microphoneEnabled(): # The callback function for enabling voice control
     
     microphone_enabled = True # Set to true
     print(f"Microphone enabled {microphone_enabled}")
+    if not KeywordThread.is_alive(): # if the thread handling keyword processing is not started...
+        KeywordThread.start() # ...start it asyncronously
+    
 
 def microphoneDisabled(): # The callback function for disabling voice control
 
-    global microphone_enabled # Use the global variable
+    global microphone_enabled, KeywordThread # Use the global variable
     
     microphone_enabled = False # Set to false
     print(f"Microphone enabled {microphone_enabled}")
+    if KeywordThread.is_alive(): # if the thread handling keyword processing is running...
+        KeywordThread.join() # terminate it by waiting for it to exit, now that 'microphone_enabled' is false
+        del KeywordThread # dealloc it and destroy the original object
+        KeywordThread = createKeywordThread() # create a new instance of the thread with the same parameters
+    
+def createKeywordThread(): # this function creates and returns a thread object with the same parameters (to run the keyword listening model)
+    
+    # return a thread with:
+        # the function target being run_model, a function in the loaded KeywordModel python file
+        # passing arguments of the Coral TPU interpreter object, the path to the recognized word list
+        # passing keyword arguments of the callback function for an individual Keyword parse operation
+        # the number of frames of audio to process at a time (default 33)
+        # the recorder context manager object (a pyaudio instance)
+        # the break condition to exit its main while loop
+            # this condition is a lambda function that will be called on every loop
+            # it always will return the value of 'microphone_enabled' from this code file
+    return threading.Thread(target = KeywordModel.run_model, 
+                            args=(interpreter, path_to_recognized_words), 
+                            kwargs=({'result_callback': evaluate_results,
+                            'num_frames_hop': int(args.num_frames_hop),
+                            'recorder': audio_recorder,
+                            'break_condition': lambda : microphone_enabled}))
+
+    # see windmill_voice_recognition.py for more info
+
+def evaluate_results(result, commands, labels, top=3): # this is the callback function that parses the current detected audio
+    """Example callback function that prints the passed detections."""
+    
+    # this code was copied entirely from the example file
+    # only my code additions are commented, the rest remains to complicaed to explain here
+    
+    previous_keywords.pop() # pop the last item off of the previous keywords buffer
+
+    top_results = np.argsort(-result)[:top]
+    for p in range(top):
+        l = labels[top_results[p]]
+        if l in commands.keys():
+         threshold = commands[labels[top_results[p]]]["conf"]
+        else:
+         threshold = 0.5
+        if top_results[p] and result[top_results[p]] > threshold: # << This is the code that gets hit if we have a confident detection
+         debug("\033[1m\033[93m*%15s*\033[0m (%.3f)" %
+                        (l, result[top_results[p]]))
+         
+         
+         perform_action_from_keyword(l) # Call my own function to perform an action based on the keyword detection, where 'l' is the keyword string
+         
+        elif result[top_results[p]] > 0.005:
+         debug(" %15s (%.3f)" % (l, result[top_results[p]]))
+
+    if len(previous_keywords) < 5: # if the previous keywords buffer is less than 5...
+        previous_keywords.insert(0, '') # insert an empty string to the beginning
+    debug(previous_keywords)
+
+def perform_action_from_keyword(keyword): # this function takes in a detected keyword as a string and determines what action to perform
+    
+    global previous_keywords # use the global variable
+    
+    if keyword in previous_keywords: # if the keywords already exists in the previous keywords list...
+        return # then return immediatly; do not perform an action, as the keyword might be a double or triple detection
+    else:
+        previous_keywords.insert(0, keyword) # otherwise, add this keyword into the previous keyword buffer
+        
+        if running == False: # now, check if the windmill has been soft powered off
+            if keyword == 'switch_on': # if so, we should ignore all keywords except 'switch_on'
+                soft_power_on() # if detected, call the power on function
+            return # return now so we don't process other keywords
+        
+
+        # This is a dictionary mapping valid detecable keyword strings with a specific tuple
+        # This tuple contains a function object that is callable, and an arguemnt to pass into that function
+        action_mapping_args =   {
+                                'turn_up': (speedAxisMoved, -1), 'turn_down': (speedAxisMoved, 1),
+                                'turn_left': (directionAxisMoved, -1), 'turn_right': (directionAxisMoved, 1),
+                                'reverse': (directionAxisMoved, -1 if clockwise else 1)
+                                }
+        
+        # This is another dictionary mapping valid detecable keyword strings with a callable function object
+        # This time, the called function needs no arguments
+        action_mapping_no_args= {
+                                'switch_off': soft_power_off, 'switch_on': soft_power_on,
+                                'next_song': musicTrackUp, 'previous_song': musicTrackDown,
+                                'channel_one': lightShow1Selected, 'channel_two': lightShow2Selected,
+                                'channel_three': lightShow3Selected, 'channel_four': lightShow4Selected,
+                                'mute': mute, 'unmute': unmute, 'start_video': lights_on, 'stop_video': lights_off,
+                                'engage': toggleControlButtonPressed
+                                }
+        
+        try: # wrap in a try block in case the detected keyword is not one we are interested in
+            action_mapping_args.get(keyword)[0](action_mapping_args.get(keyword)[1]) # search the dictionary for the tuple corresponding to the keyword, call the function object from it, passing in the specific argument
+            return # once we've executed the function object, return
+        except TypeError: # it wasn't found in the first dictionary
+            pass # continue on
+        try:
+            action_mapping_no_args.get(keyword)() # search the second dictionary with the keyword for the mapped callable function object, then call it
+            return # once we've executed the function object, return
+        except TypeError: # it wasn't found in either dictionary, it must have been a keyword we are not looking for
+            debug("Keyword detected but not recognized as a valid action")
 
 if __name__ == "__main__": # are we running as a script ? This is the check that will execute our user code
 
-    while running: # Repeat while exit is not pressed
+    while running: # Repeat while the exit signal is not given
         try:
-            ain1, ain2, bin1, bin2 = setup_GPIOS() # Start by setting up the GPIOs
-            controller = wait_for_connection(Gamepad.Custom_Nintendo) # Wait for a game controller to be connected, and give it our custom Nintendo mapping
+            print("Setting up GPIOs...")
+            # Start by setting up the GPIOs
+            ain1, ain2, bin1, bin2 = setup_GPIOS() 
+
+            print("Loading PyCoral model and parsing arguments...")
+            # next, initialize the Coral TPU with the keyword model, and parse default arguments
+            args, interpreter, mic = setup_Coral()
+            
+            print("Setting up PyAudio recording interface...")
+            # start pyaudio audio recorder instance; this returns a custom context manager 
+            #defined a code file in the Coral library (BUG DETECTED, see note at bottom)
+            audio_recorder = KeywordModel.start_audio_recorder(mic, sample_rate_hz=int(args.sample_rate_hz)) 
+            
+            print("Threading online. Creating keyword detector async thread...")
+            # create and return a new threading.thread object to be our asynchronous keyword detection function
+            # parameters of which are defined in the function itself
+            KeywordThread = createKeywordThread()
+
+            print("Detecting game controller...")
+            # Wait for a game controller to be connected, and give it our custom Nintendo mapping
+            controller = wait_for_connection(Gamepad.Custom_Nintendo)
+
+            print("Creating controller update thread and setting up callback functions...")
             controller.startBackgroundUpdates() # start the background update threads for the callbacks
-            controller.addButtonPressedHandler(toggleControlButton, toggleControlButtonPressed) # Add the handler for toggleing control mode
+            controller.addButtonPressedHandler(toggleControlButton, toggleControlButtonPressed) # Add the handler for toggling control mode
             controller.addButtonPressedHandler(exitButton, exitButtonPressed) # Add the handler for power on/off
-            controller.addAxisMovedHandler(speedAxis, speedAxisMoved) # Add the handler for D-PAD control of speed
-            controller.addAxisMovedHandler(directionAxis, directionAxisMoved) # Add the handler for D-PAD control of rotation direction
-            controller.addButtonPressedHandler(lightShow1Button, lightShow1Selected) # Add the handler for selecting light show 1
-            controller.addButtonPressedHandler(lightShow2Button, lightShow2Selected) # Add the handler for selecting light show 2
-            controller.addButtonPressedHandler(lightShow3Button, lightShow3Selected) # Add the handler for selecting light show 3
-            controller.addButtonPressedHandler(lightShow4Button, lightShow4Selected) # Add the handler for selecting light show 4
+            if toggleMode: # If we have defined the windmill to start in stick control mode...
+                controller.addAxisMovedHandler(speedDirectionStick, speedDirectionAxisMoved) # add the handler for stick control of speed and direction
+            else: # otherwise, it's defined to be in D-PAD control mode
+                controller.addAxisMovedHandler(speedAxis, speedAxisMoved) # Add the handler for D-PAD control of speed
+                controller.addAxisMovedHandler(directionAxis, directionAxisMoved) # Add the handler for D-PAD control of rotation direction
+            if light_show_enabled: # if we have defined the windmill to start with the light show enabled...
+                controller.addButtonPressedHandler(lightShow1Button, lightShow1Selected) # Add the handler for selecting light show 1
+                controller.addButtonPressedHandler(lightShow2Button, lightShow2Selected) # Add the handler for selecting light show 2
+                controller.addButtonPressedHandler(lightShow3Button, lightShow3Selected) # Add the handler for selecting light show 3
+                controller.addButtonPressedHandler(lightShow4Button, lightShow4Selected) # Add the handler for selecting light show 4
             controller.addButtonPressedHandler(lightShowToggleButton, lightShowToggle) # Add the handler for enabling/disabling the light show
+            if music_enabled: # if we have defined the windmill to start with the music playing function enabled...
+                controller.addButtonPressedHandler(musicTrackUpButton, musicTrackUp)
+                controller.addButtonPressedHandler(musicTrackDownButton, musicTrackDown)
             controller.addButtonPressedHandler(musicToggleButton, musicToggle) # Add the handler for enabling music (which will furthur enable the handlers for selecting different tracks)
             controller.addButtonPressedHandler(microphoneEnableButton, microphoneEnabled) # Add the handler for enabling microphone
             controller.addButtonPressedHandler(microphoneDisableButton, microphoneDisabled) # Add the handler for disabling microphone
-
+            
+            system('clear')
             main() # start the main function code
             
             print("Power Off") # once main quits, we know we got an exit signal from the power off button
             reset_gpios() # set all GPIOs to low
             controller.removeAllEventHandlers() # remove all event handlers
-            controller.addButtonPressedHandler(exitButton, exitButtonPressed) #re-add the power button event handler so that we can turn the windmill back on if we want to
-            light_show_enabled = False # This is where we would ideally kill the light show thread and music threads
+            controller.addButtonPressedHandler(exitButton, exitButtonPressed) #re-add the power button event handler so that we can turn the windmill back on with the controller if we want to
+            # also, since the callbacks for keyword recognition are not part of the removed controller callbacks, we are still listening for keywords, such as switch_on
+            
+            light_show_enabled_temp = light_show_enabled # stash the current statuses of lights and music in temporary variables
+            music_enabled_temp = music_enabled
+            light_show_enabled = False # Stop the lights and music
             music_enabled = False
             
             while not running: # keep checking if "running" ever gets set to true; this means power back on
                 sleep(0.3)
             print("Power On")
-
+            
+            # retore the statuses of the lights and music to what they were from the temporary variables
+            music_enabled = music_enabled_temp
+            light_show_enabled = light_show_enabled_temp
 
         except OSError: # catch gamepad errors if disconnected
             print("Gamepad Error ? Please plug in gamepad")
@@ -419,13 +630,14 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             print("Gamepad Error ? Please plug in gamepad")
         except KeyboardInterrupt: # if CTRL+C is pressed
             print("CTRL+C Pressed")
-            running = False # setting running to false at this point means that the entire sript will exit; we want to completely exit on CTRL+C
+            running = False # setting running to false at this point means that the entire script will exit; we want to completely exit on CTRL+C
+            light_show_enabled = False # This is where we would ideally kill the light show thread and music threads
+            music_enabled = False
         finally:
             gpio.cleanup()  # make sure to cleanup the GPIO pins (reset them all to high-impendance inputs)
                             # when the program is finished
             controller.removeAllEventHandlers() # remove all event handlers
             controller.disconnect() # terminate the background callback updater thread
-            light_show_enabled = False # This is where we would ideally kill the light show thread and music threads
-            music_enabled = False
+            
 
     print("Finished!")
