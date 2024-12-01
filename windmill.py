@@ -1,4 +1,4 @@
-# Yuletide Twister Rev 1.013
+# Yuletide Twister Rev 1.014
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
@@ -544,12 +544,15 @@ def perform_action_from_keyword(keyword): # this function takes in a detected ke
                                 }
         
         try: # wrap in a try block in case the detected keyword is not one we are interested in
-            action_mapping_args.get(keyword)[0](action_mapping_args.get(keyword)[1]) # search the dictionary for the tuple corresponding to the keyword, call the function object from it, passing in the specific argument
+            # search the dictionary for the tuple corresponding to the keyword, 
+            #call the function object from it, passing in the specific argument
+            action_mapping_args.get(keyword)[0](action_mapping_args.get(keyword)[1]) 
             return # once we've executed the function object, return
         except TypeError: # it wasn't found in the first dictionary
             pass # continue on
         try:
-            action_mapping_no_args.get(keyword)() # search the second dictionary with the keyword for the mapped callable function object, then call it
+            # search the second dictionary with the keyword for the mapped callable function object, then call it
+            action_mapping_no_args.get(keyword)()
             return # once we've executed the function object, return
         except TypeError: # it wasn't found in either dictionary, it must have been a keyword we are not looking for
             debug("Keyword detected but not recognized as a valid action")
@@ -641,3 +644,6 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             
 
     print("Finished!")
+
+    #Note: BUG discovered in pyaudio library involving creating pyaudio instance on an asyncronous thread, leading to a segfault
+    # Temporary solution: create a global context manager that never goes out of scope, and only use it asyncronously
