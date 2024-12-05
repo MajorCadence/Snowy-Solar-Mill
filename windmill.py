@@ -1,9 +1,9 @@
-# Yuletide Twister Rev 1.014
+# Yuletide Twister Rev 1.015
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
-#TO-DO: add code to play music tracks asyncronously (possibly from beeper speaker over PWM pins?)
-#       add code to cycle light shows asyncronously
+#TO-DO: add code to cycle light shows asyncronously
+# add code to read MCP3008 and trigger events based on voltage levels
 
 import numpy as np # import numpy for processing
 import RPi.GPIO as gpio # import the RPi.GPIO python library
@@ -582,7 +582,7 @@ def TrackPlayerWorker(tracknumber):
     p.terminate()
 
 def updateMusicStatus(musictrack : int):
-    
+
     global MusicThread, music_enabled
 
     temp_music_enabled = music_enabled
