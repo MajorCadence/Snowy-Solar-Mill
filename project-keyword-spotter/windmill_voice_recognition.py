@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# eModified for SI Lab Final Project "Windmill" 2024
+# Modified for SI Lab Final Project "Windmill" 2024
 
 """Keyword spotter model."""
 from __future__ import absolute_import

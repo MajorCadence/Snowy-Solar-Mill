@@ -12,7 +12,10 @@ from time import sleep # import the sleep function so we can sleep
 import sys # import sys for importing additional libraries
 import math # import for math functions
 import threading # import for multithreading
+import pyaudio
+import wave
 from os import system # import system call for various uses
+from os import listdir, path
 #import faulthandler # import for debugging segfaults
 sys.path.insert(0, './Gamepad-Lib') # add the Piborg Gamepad library to the sys path
 sys.path.insert(1, './project-keyword-spotter') # add the project-keyword-spotter to the sys path
@@ -22,6 +25,7 @@ import windmill_voice_recognition as KeywordModel # import the project-keyword-s
 
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
+audiopath = './AudioTracks'
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
@@ -420,24 +424,26 @@ def musicToggle(): # The callback function for toggling the music
     
         controller.removeButtonPressedHandler(musicTrackUpButton, musicTrackUp)
         controller.removeButtonPressedHandler(musicTrackDownButton, musicTrackDown)
-        
+    
+    updateMusicStatus(music_track)
     print(f'Music is enabled {music_enabled}')
+    
 
 def musicTrackUp(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
     if music_enabled: # sanity check that the music is actually enabled
-        music_track = ((music_track) % 8) + 1 # If music track goes outside the bounds of 1-8, mod 8 and add 1 to fix
+        music_track = ((music_track) % 10) + 1 # If music track goes outside the bounds of 1-8, mod 8 and add 1 to fix
         print(f"Music track up | Now playing track {music_track}")
-
+        updateMusicStatus(music_track)
 
 def musicTrackDown(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
     if music_enabled: # sanity check that the music is actually enabled
-        music_track = ((music_track - 2) % 8) + 1 # If music track goes outside the bounds of 1-8, subtract 2, mod 8 and add 1 to fix
+        music_track = ((music_track - 2) % 10) + 1 # If music track goes outside the bounds of 1-8, subtract 2, mod 8 and add 1 to fix
         print(f"Music track down | Now playing track {music_track}")
-
+        updateMusicStatus(music_track)
 
 def microphoneEnabled(): # The callback function for enabling voice control
 
@@ -557,8 +563,44 @@ def perform_action_from_keyword(keyword): # this function takes in a detected ke
         except TypeError: # it wasn't found in either dictionary, it must have been a keyword we are not looking for
             debug("Keyword detected but not recognized as a valid action")
 
-if __name__ == "__main__": # are we running as a script ? This is the check that will execute our user code
+def TrackPlayerWorker(tracknumber):
+    
+    chunk = 1024
+    p = pyaudio.PyAudio()
+    tracks = [track for track in listdir(audiopath) if path.isfile(path.join(audiopath, track))]
+    tracks.sort()
+    wf = wave.open(path.join(audiopath, tracks[tracknumber]), 'rb')
+    
+    stream = p.open(format = p.get_format_from_width(wf.getsampwidth()), channels = wf.getnchannels(), rate = wf.getframerate(), output = True)
+    while music_enabled:
+        data = wf.readframes(chunk)
+        while data and music_enabled:
+            stream.write(data)
+            data = wf.readframes(chunk)
+        wf.close()
+    stream.close()
+    p.terminate()
 
+def updateMusicStatus(musictrack : int):
+    
+    global MusicThread, music_enabled
+
+    temp_music_enabled = music_enabled
+    music_enabled = False
+    if MusicThread.is_alive():
+        MusicThread.join()
+        del MusicThread
+    music_enabled = temp_music_enabled
+    MusicThread = threading.Thread(target=TrackPlayerWorker, args = [musictrack - 1])
+    if music_enabled:
+        MusicThread.start()
+
+def RunOnStartup(): #Debugging function that will run something on script start -- not needed ATM
+    pass
+
+
+if __name__ == "__main__": # are we running as a script ? This is the check that will execute our user code
+    MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
     while running: # Repeat while the exit signal is not given
         try:
             print("Setting up GPIOs...")
@@ -583,6 +625,9 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             # Wait for a game controller to be connected, and give it our custom Nintendo mapping
             controller = wait_for_connection(Gamepad.Custom_Nintendo)
 
+            updateMusicStatus(music_track)
+
+            RunOnStartup()
             print("Creating controller update thread and setting up callback functions...")
             controller.startBackgroundUpdates() # start the background update threads for the callbacks
             controller.addButtonPressedHandler(toggleControlButton, toggleControlButtonPressed) # Add the handler for toggling control mode
@@ -645,5 +690,5 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
 
     print("Finished!")
 
-    #Note: BUG discovered in pyaudio library involving creating pyaudio instance on an asyncronous thread, leading to a segfault
+    #Note: BUG discovered in pyaudio library involving creating pyaudiof instance on an asyncronous thread, leading to a segfault
     # Temporary solution: create a global context manager that never goes out of scope, and only use it asyncronously
