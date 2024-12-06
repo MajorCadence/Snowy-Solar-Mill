@@ -1,4 +1,4 @@
-# Yuletide Twister Rev 1.015
+# Yuletide Twister Rev 1.016
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
@@ -21,11 +21,12 @@ sys.path.insert(0, './Gamepad-Lib') # add the Piborg Gamepad library to the sys 
 sys.path.insert(1, './project-keyword-spotter') # add the project-keyword-spotter to the sys path
 import Gamepad # import the Piborg Gamepad library
 import windmill_voice_recognition as KeywordModel # import the project-keyword-spotter library main call function
-
+import mcp3008
 
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
+revision = 1.016
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
@@ -72,7 +73,7 @@ previous_keywords = ['', '', '', '', ''] # A buffer of previous detected keyword
 
 def main(): # The main function which prints the build info and calls the stepper loop
 
-    print("Yuletide Twister Rev 1.0")
+    print(f"Yuletide Twister Rev {revision}")
     print("Constructed by Sara, Jennifer, and Connor")
     reset_gpios() # reset all GPIO outputs to low
     stepper() # call the main stepper loop
@@ -595,17 +596,34 @@ def updateMusicStatus(musictrack : int):
     if music_enabled:
         MusicThread.start()
 
+def ReadADCWorker():
+
+    while running:
+        solarVoltage, chargingVoltage, battVoltage, systemVoltage = adc.read_all(5)[12:]
+        debug(solarVoltage)
+        debug(chargingVoltage)
+        debug(battVoltage)
+        debug(systemVoltage)
+        sleep(1)
+        #do conditional setting of LEDs here
+
+
 def RunOnStartup(): #Debugging function that will run something on script start -- not needed ATM
     pass
 
 
 if __name__ == "__main__": # are we running as a script ? This is the check that will execute our user code
-    MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
+    
     while running: # Repeat while the exit signal is not given
         try:
             print("Setting up GPIOs...")
             # Start by setting up the GPIOs
             ain1, ain2, bin1, bin2 = setup_GPIOS() 
+
+            print("Initializing MCP3008 ADC")
+            adc = mcp3008.MCP3008(0, 0)
+            MonitorThread = threading.Thread(target=ReadADCWorker)
+            MonitorThread.start()
 
             print("Loading PyCoral model and parsing arguments...")
             # next, initialize the Coral TPU with the keyword model, and parse default arguments
@@ -616,7 +634,7 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             #defined a code file in the Coral library (BUG DETECTED, see note at bottom)
             audio_recorder = KeywordModel.start_audio_recorder(mic, sample_rate_hz=int(args.sample_rate_hz)) 
             
-            print("Threading online. Creating keyword detector async thread...")
+            print("Creating keyword detector async thread...")
             # create and return a new threading.thread object to be our asynchronous keyword detection function
             # parameters of which are defined in the function itself
             KeywordThread = createKeywordThread()
@@ -625,7 +643,12 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             # Wait for a game controller to be connected, and give it our custom Nintendo mapping
             controller = wait_for_connection(Gamepad.Custom_Nintendo)
 
+            print("Initializing music player system")
+            MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
             updateMusicStatus(music_track)
+
+            
+            print("All threads online")
 
             RunOnStartup()
             print("Creating controller update thread and setting up callback functions...")
@@ -667,7 +690,8 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
             while not running: # keep checking if "running" ever gets set to true; this means power back on
                 sleep(0.3)
             print("Power On")
-            
+            MonitorThread.join()
+
             # retore the statuses of the lights and music to what they were from the temporary variables
             music_enabled = music_enabled_temp
             light_show_enabled = light_show_enabled_temp
