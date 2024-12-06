@@ -1,4 +1,4 @@
-# Yuletide Twister Rev 1.016
+# Yuletide Twister Rev 1.017
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
@@ -26,10 +26,11 @@ import mcp3008
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
-revision = 1.016
+revision = 1.017
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
+V_REF = 4.895
 
 # These variables define the button mapping for our controller
 
@@ -579,6 +580,7 @@ def TrackPlayerWorker(tracknumber):
             stream.write(data)
             data = wf.readframes(chunk)
         wf.close()
+        wf = wave.open(path.join(audiopath, tracks[tracknumber]), 'rb')
     stream.close()
     p.terminate()
 
@@ -599,11 +601,11 @@ def updateMusicStatus(musictrack : int):
 def ReadADCWorker():
 
     while running:
-        solarVoltage, chargingVoltage, battVoltage, systemVoltage = adc.read_all(5)[12:]
-        debug(solarVoltage)
-        debug(chargingVoltage)
-        debug(battVoltage)
-        debug(systemVoltage)
+        solarVoltage, chargingVoltage, battVoltage, systemVoltage = adc.read_all(V_REF)[12:]
+        print(solarVoltage)
+        print(chargingVoltage)
+        print(battVoltage)
+        print(systemVoltage)
         sleep(1)
         #do conditional setting of LEDs here
 
