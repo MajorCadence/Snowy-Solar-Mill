@@ -25,7 +25,7 @@ import mcp3008
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
-revision = 1.200
+revision = 1.050
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
