@@ -3,7 +3,6 @@
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
 #TO-DO: add code to cycle light shows asyncronously
-# add code to read MCP3008 and trigger events based on voltage levels
 
 import numpy as np # import numpy for processing
 import RPi.GPIO as gpio # import the RPi.GPIO python library
@@ -26,17 +25,21 @@ import mcp3008
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
-revision = 1.017
+revision = 1.200
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
-V_REF = 4.895
+V_REF = 4.787
+solarVoltage, chargingVoltage, battVoltage, systemVoltage = [0 for i in range(4)]
+
+FatalError = False
 
 # These variables define the button mapping for our controller
 
 speedDirectionStick = 'LAS_Y_Axis' # The left analog stick movement to control the speed and direction in "stick" mode
 exitButton = 'Home' # The home button will be the power button
 toggleControlButton = 'L_Stick_Press' # The left stick press will toggle the control mode between "stick" and "D-PAD"
+solarToggleButton = 'R_Stick_Press' # The right stick press will toggle the windmill to only operate on solar
 speedAxis = 'DPAD_Y_Axis'  # The D-PAD Y axis will (up-down) will control the speed in "D-PAD" mode
 directionAxis = 'DPAD_X_Axis' # The D-PAD X axis (left-rigt) will control the rotation direction in "D-PAD" mode
 lightShow1Button = 'A' # The A button will select light show #1
@@ -61,6 +64,7 @@ new_direction = 0 # The new direction we should rotate (set to 0 for now)
 rowQ = 0x1 # The very first row of the rotation truth table (0 0 0 1) in the form (a1, b1, a2, b2)
 rowR = 0x3 # The next row at one half step later (0 0 1 1) in the form (a1, a2, b1, b2)
 running = True # Whether or not the system is powered on (True)
+stop_adc = False
 toggleMode = 0 # The control mode we are currently in (0=DPAD mode, 1=Stick mode)
 light_show_enabled = True # Start with the light show enabled
 light_show = 1 # Start with the light show set to #1
@@ -68,7 +72,7 @@ music_enabled = False # Start with the music disabled
 music_track = 1 # The music track will be set to the first track
 microphone_enabled = False # Start with the microphone disabled
 previous_keywords = ['', '', '', '', ''] # A buffer of previous detected keywords (default set to empty)
-
+solar_only = False
 
 # The code is for rotating with half steps
 
@@ -76,7 +80,7 @@ def main(): # The main function which prints the build info and calls the steppe
 
     print(f"Yuletide Twister Rev {revision}")
     print("Constructed by Sara, Jennifer, and Connor")
-    reset_gpios() # reset all GPIO outputs to low
+    reset_motor_gpios() # reset all GPIO outputs to low
     stepper() # call the main stepper loop
                 
                 
@@ -181,6 +185,7 @@ def stepper(): # this is the main motor rotation function, that loops
             rowR = temp
 
 
+
 def setup_Coral(): # this function initializes the Coral TPU accelerator and loads it with the keyword detection model's tensorflow file
     
     parser = argparse.ArgumentParser() # instantiate a new command line argument parser
@@ -195,18 +200,37 @@ def setup_Coral(): # this function initializes the Coral TPU accelerator and loa
     return args, interpreter, mic # return the argument parser structure, and object of the interpreter, and the microphone ID number to use
 
 def wait_for_connection(gamepadType): # this function waits for a controller to be connected and then returns a gamepad object that will be used to interface with the controller
-
+    
+    ClearStatusLight()
     if not Gamepad.available(): # wait for a controller to be connected
         print("Please connect the controller to the windmill...")
         while not Gamepad.available(): # keep checking every second if a controller has been connected
-            sleep(1)
+            sleep(0.2)
+            STATUS_RED_PWM.ChangeDutyCycle(100)
+            STATUS_GREEN_PWM.ChangeDutyCycle(5)
+            sleep(0.2)
+            STATUS_RED_PWM.ChangeDutyCycle(0)
+            STATUS_GREEN_PWM.ChangeDutyCycle(0)
+    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+            
     gamepad = gamepadType() # call the function addressed by the gamepad type that we pass in; this contains the keymapping info
     print("Gamepad connected...")
     return gamepad # return the gamepad object
 
-def setup_GPIOS(): # this function sets up the GPIO pins as outputs with their correct pin numbering, then returns the pin numbering info
+def wait_for_microphone():
 
-    gpio.setmode(gpio.BCM) # use the broadcom board numbering
+    ClearStatusLight()
+    while not path.exists('/dev/snd/by-id'):
+        sleep(0.2)
+        STATUS_RED_PWM.ChangeDutyCycle(100)
+        STATUS_BLUE_PWM.ChangeDutyCycle(10)
+        sleep(0.2)
+        STATUS_RED_PWM.ChangeDutyCycle(0)
+        STATUS_BLUE_PWM.ChangeDutyCycle(0)
+    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+
+def setup_motor_GPIOs(): # this function sets up the GPIO pins as outputs with their correct pin numbering, then returns the pin numbering info
+    
     ain1 = 26 # AOUT_1 = RED <- Ain1 asssigned to GPIO pin 26, Aout1 connection to motor has the red wire
     ain2 = 19 # AOUT_2 = YELLOW <- Ain2 asssigned to GPIO pin 19, Aout2 connection to motor has the yellow wire
     bin1 = 6  # BOUT_2 = GREEN <- Bin1 asssigned to GPIO pin 6, Bout1 connection to motor has the green wire
@@ -218,6 +242,44 @@ def setup_GPIOS(): # this function sets up the GPIO pins as outputs with their c
     gpio.setup(bin1, gpio.OUT)
     gpio.setup(bin2, gpio.OUT)
     return ain1, ain2, bin1, bin2
+
+def setup_LED_GPIOs(): # this function sets up the GPIO pins as outputs with their correct pin numbering, then returns the pin numbering info
+    
+    SOLAR_LED = 0
+    POWER_RED = 17
+    POWER_GREEN = 27
+    POWER_BLUE = 22
+    STATUS_RED = 23
+    STATUS_GREEN = 24
+    STATUS_BLUE = 25
+
+    gpio.setup(SOLAR_LED, gpio.OUT)
+    gpio.setup(POWER_RED, gpio.OUT)
+    gpio.setup(POWER_GREEN, gpio.OUT)
+    gpio.setup(POWER_BLUE, gpio.OUT)
+    gpio.setup(STATUS_RED, gpio.OUT)
+    gpio.setup(STATUS_GREEN, gpio.OUT)
+    gpio.setup(STATUS_BLUE, gpio.OUT)
+
+    POWER_RED_PWM = gpio.PWM(POWER_RED, 500)
+    POWER_GREEN_PWM = gpio.PWM(POWER_GREEN, 500)
+    POWER_BLUE_PWM = gpio.PWM(POWER_BLUE, 500)
+    STATUS_RED_PWM = gpio.PWM(STATUS_RED, 500)
+    STATUS_GREEN_PWM = gpio.PWM(STATUS_GREEN, 500)
+    STATUS_BLUE_PWM = gpio.PWM(STATUS_BLUE, 500)
+
+    gpio.output(SOLAR_LED, 0)
+    POWER_RED_PWM.start(0)
+    POWER_GREEN_PWM.start(0)
+    POWER_BLUE_PWM.start(0)
+    STATUS_RED_PWM.start(0)
+    STATUS_GREEN_PWM.start(0)
+    STATUS_BLUE_PWM.start(0)
+
+    # set up Ain1, Ain2, Bin1, and Bin2 as GPIO outputs
+    
+    return SOLAR_LED, POWER_RED_PWM, POWER_GREEN_PWM, POWER_BLUE_PWM, STATUS_RED_PWM, STATUS_GREEN_PWM, STATUS_BLUE_PWM
+
 
 
 def debug(*messages): # print debug messages if debug enabled
@@ -232,7 +294,7 @@ def debug_pause(): # pause for user press key if debug enabled
     if is_debug:
         input()
 
-def reset_gpios(): # write all zeros to the state of the current GPIO outputs, clearing them
+def reset_motor_gpios(): # write all zeros to the state of the current GPIO outputs, clearing them
 
     gpio.output(ain1, 0)
     gpio.output(bin2, 0)
@@ -301,7 +363,6 @@ def speedDirectionAxisMoved(new_position: int): # The callback function for the 
 def toggleControlButtonPressed(): # The callback function for the control mode toggle switch
 
     global toggleMode # Use the global variable
-
     toggleMode = toggleMode ^ 0b1 # toggle the control mode boolean 'toggleMode' using XOR
     if toggleMode: # If the toggle_mode is now 1 (i.e. stick control), remove all handlers for the D-PAD control, and add the handler for stick control
     
@@ -455,6 +516,10 @@ def microphoneEnabled(): # The callback function for enabling voice control
     print(f"Microphone enabled {microphone_enabled}")
     if not KeywordThread.is_alive(): # if the thread handling keyword processing is not started...
         KeywordThread.start() # ...start it asyncronously
+    ClearStatusLight()
+    STATUS_RED_PWM.ChangeDutyCycle(100)
+    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+    STATUS_BLUE_PWM.ChangeDutyCycle(100)
     
 
 def microphoneDisabled(): # The callback function for disabling voice control
@@ -467,7 +532,16 @@ def microphoneDisabled(): # The callback function for disabling voice control
         KeywordThread.join() # terminate it by waiting for it to exit, now that 'microphone_enabled' is false
         del KeywordThread # dealloc it and destroy the original object
         KeywordThread = createKeywordThread() # create a new instance of the thread with the same parameters
-    
+    ClearStatusLight()
+    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+
+def solarToggle():
+
+    global solar_only
+    print(f"Toggling solar power mode {solar_only}")
+    solar_only = solar_only ^ 1
+
+
 def createKeywordThread(): # this function creates and returns a thread object with the same parameters (to run the keyword listening model)
     
     # return a thread with:
@@ -529,6 +603,8 @@ def perform_action_from_keyword(keyword): # this function takes in a detected ke
         if running == False: # now, check if the windmill has been soft powered off
             if keyword == 'switch_on': # if so, we should ignore all keywords except 'switch_on'
                 soft_power_on() # if detected, call the power on function
+            elif keyword == 'engage':
+                solarToggle()
             return # return now so we don't process other keywords
         
 
@@ -548,7 +624,7 @@ def perform_action_from_keyword(keyword): # this function takes in a detected ke
                                 'channel_one': lightShow1Selected, 'channel_two': lightShow2Selected,
                                 'channel_three': lightShow3Selected, 'channel_four': lightShow4Selected,
                                 'mute': mute, 'unmute': unmute, 'start_video': lights_on, 'stop_video': lights_off,
-                                'engage': toggleControlButtonPressed
+                                'select': toggleControlButtonPressed, 'engage': solarToggle
                                 }
         
         try: # wrap in a try block in case the detected keyword is not one we are interested in
@@ -593,127 +669,250 @@ def updateMusicStatus(musictrack : int):
     if MusicThread.is_alive():
         MusicThread.join()
         del MusicThread
+        #print("Deleted old music thread")
     music_enabled = temp_music_enabled
     MusicThread = threading.Thread(target=TrackPlayerWorker, args = [musictrack - 1])
     if music_enabled:
+        #print("Starting new music thread")
         MusicThread.start()
 
 def ReadADCWorker():
+    battVoltages = []
+    gpio.setmode(gpio.BCM)
+    global running
+    
+    while not stop_adc:
+        global solarVoltage, chargingVoltage, battVoltage, systemVoltage
 
-    while running:
         solarVoltage, chargingVoltage, battVoltage, systemVoltage = adc.read_all(V_REF)[12:]
-        print(solarVoltage)
-        print(chargingVoltage)
-        print(battVoltage)
-        print(systemVoltage)
-        sleep(1)
-        #do conditional setting of LEDs here
+        #print("Current voltages:", solarVoltage, chargingVoltage, battVoltage, systemVoltage)
+        
+        if solarVoltage > 3.7:
+            gpio.output(SOLAR_LED, 1)
+        else:
+            gpio.output(SOLAR_LED, 0)
+            if solar_only and running:
+                running = False
+                sleep(1)
+                running = True
+        
+        if systemVoltage < 4:
+            running = False
 
+        battVoltages.insert(0, battVoltage)
+        if len(battVoltages) > 5:
+            battVoltages.pop()
+        
+        ClearPowerLight()
+        if chargingVoltage > 3.7:
+            
+            for voltage in range(len(battVoltages)):
+                if battVoltages[voltage] <= 4.2:
+                    POWER_RED_PWM.ChangeDutyCycle(100)
+                    POWER_GREEN_PWM.ChangeDutyCycle(10)
+                    break
+                if voltage == 4:
+                    POWER_BLUE_PWM.ChangeDutyCycle(100)
+                    POWER_GREEN_PWM.ChangeDutyCycle(10)
+
+            
+                
+        elif battVoltage < 2.55:
+            POWER_RED_PWM.ChangeDutyCycle(100)
+
+
+        sleep(0.3)
+
+        
+        if not path.exists('/dev/snd/by-id'):
+            running = False
+            sleep(1)
+            running = True
+        
 
 def RunOnStartup(): #Debugging function that will run something on script start -- not needed ATM
     pass
 
+def perform_standby_check(): # This function will block as long as standby is active
+
+    global music_enabled, light_show_enabled, running
+    
+    light_show_enabled_temp = light_show_enabled # stash the current statuses of lights and music in temporary variables
+    music_enabled_temp = music_enabled
+    light_show_enabled = False # Stop the lights and music
+    music_enabled = False
+
+    if MusicThread is not None:
+        updateMusicStatus(music_track)
+    ClearStatusLight()
+    while not running or systemVoltage < 4 or (solar_only and solarVoltage < 3.7): # keep checking if "running" ever gets set to true; this means power back on
+        if systemVoltage < 4:
+            for i in range(0, 101):
+                STATUS_RED_PWM.ChangeDutyCycle(i)
+                sleep(0.005)
+            for i in range(0, 101):
+                STATUS_RED_PWM.ChangeDutyCycle(100 - i)
+                sleep(0.005)
+        elif solar_only and solarVoltage < 3.7:
+            for i in range(0, 100):
+                STATUS_RED_PWM.ChangeDutyCycle(i)
+                STATUS_GREEN_PWM.ChangeDutyCycle(10 * math.exp(i/25 - 4))
+                sleep(0.005)
+            for i in range(0, 101):
+                STATUS_RED_PWM.ChangeDutyCycle(100 - i)
+                STATUS_GREEN_PWM.ChangeDutyCycle(10 - 10 * math.exp(i/25 - 4))
+                sleep(0.005)
+        else:
+            STATUS_RED_PWM.ChangeDutyCycle(100)
+            STATUS_GREEN_PWM.ChangeDutyCycle(10)
+            sleep(0.3)
+        if controller is not None:
+            if not controller.isConnected():
+                break
+        else:
+            running = True
+    ClearStatusLight()
+    print("Power On")
+    
+    # retore the statuses of the lights and music to what they were from the temporary variables
+    music_enabled = music_enabled_temp
+    light_show_enabled = light_show_enabled_temp
+    
+def ClearStatusLight():
+    STATUS_RED_PWM.ChangeDutyCycle(0) 
+    STATUS_GREEN_PWM.ChangeDutyCycle(0) 
+    STATUS_BLUE_PWM.ChangeDutyCycle(0)
+
+def ClearPowerLight():
+    POWER_RED_PWM.ChangeDutyCycle(0) 
+    POWER_GREEN_PWM.ChangeDutyCycle(0) 
+    POWER_BLUE_PWM.ChangeDutyCycle(0) 
 
 if __name__ == "__main__": # are we running as a script ? This is the check that will execute our user code
+
+    print("Initializing MCP3008 ADC")
+    adc = mcp3008.MCP3008(0, 0)
+    MonitorThread = threading.Thread(target=ReadADCWorker)
+    MonitorThread.start()
     
-    while running: # Repeat while the exit signal is not given
-        try:
-            print("Setting up GPIOs...")
-            # Start by setting up the GPIOs
-            ain1, ain2, bin1, bin2 = setup_GPIOS() 
+    print("Setting up GPIOs...")
+    # Start by setting up the GPIOs
+    gpio.setmode(gpio.BCM) # use the broadcom board numbering
+    ain1, ain2, bin1, bin2 = setup_motor_GPIOs()
+    SOLAR_LED, POWER_RED_PWM, POWER_GREEN_PWM, POWER_BLUE_PWM, STATUS_RED_PWM, STATUS_GREEN_PWM, STATUS_BLUE_PWM = setup_LED_GPIOs()
 
-            print("Initializing MCP3008 ADC")
-            adc = mcp3008.MCP3008(0, 0)
-            MonitorThread = threading.Thread(target=ReadADCWorker)
-            MonitorThread.start()
+    print("Loading PyCoral model and parsing arguments...")
+    # next, initialize the Coral TPU with the keyword model, and parse default arguments
+    args, interpreter, mic = setup_Coral()
+    
+    print("Setting up PyAudio recording interface...")
+    # start pyaudio audio recorder instance; this returns a custom context manager 
+    #defined a code file in the Coral library (BUG DETECTED, see note at bottom)
+    audio_recorder = KeywordModel.start_audio_recorder(mic, sample_rate_hz=int(args.sample_rate_hz)) 
 
-            print("Loading PyCoral model and parsing arguments...")
-            # next, initialize the Coral TPU with the keyword model, and parse default arguments
-            args, interpreter, mic = setup_Coral()
-            
-            print("Setting up PyAudio recording interface...")
-            # start pyaudio audio recorder instance; this returns a custom context manager 
-            #defined a code file in the Coral library (BUG DETECTED, see note at bottom)
-            audio_recorder = KeywordModel.start_audio_recorder(mic, sample_rate_hz=int(args.sample_rate_hz)) 
-            
-            print("Creating keyword detector async thread...")
-            # create and return a new threading.thread object to be our asynchronous keyword detection function
-            # parameters of which are defined in the function itself
-            KeywordThread = createKeywordThread()
+    print("Creating keyword detector async thread...")
+                # create and return a new threading.thread object to be our asynchronous keyword detection function
+                # parameters of which are defined in the function itself
+    KeywordThread = createKeywordThread()
+    running = True
+    MusicThread = None
+    controller = None
+    perform_standby_check()
+    while not FatalError:
+        running = True
+        while running: # Repeat while the exit signal is not given
+            try:
+                
+                
+                
+                wait_for_microphone()
 
-            print("Detecting game controller...")
-            # Wait for a game controller to be connected, and give it our custom Nintendo mapping
-            controller = wait_for_connection(Gamepad.Custom_Nintendo)
+                
 
-            print("Initializing music player system")
-            MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
-            updateMusicStatus(music_track)
+                print("Detecting game controller...")
+                # Wait for a game controller to be connected, and give it our custom Nintendo mapping
+                controller = wait_for_connection(Gamepad.Custom_Nintendo)
 
-            
-            print("All threads online")
+                print("Initializing music player system")
+                MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
+                updateMusicStatus(music_track)
 
-            RunOnStartup()
-            print("Creating controller update thread and setting up callback functions...")
-            controller.startBackgroundUpdates() # start the background update threads for the callbacks
-            controller.addButtonPressedHandler(toggleControlButton, toggleControlButtonPressed) # Add the handler for toggling control mode
-            controller.addButtonPressedHandler(exitButton, exitButtonPressed) # Add the handler for power on/off
-            if toggleMode: # If we have defined the windmill to start in stick control mode...
-                controller.addAxisMovedHandler(speedDirectionStick, speedDirectionAxisMoved) # add the handler for stick control of speed and direction
-            else: # otherwise, it's defined to be in D-PAD control mode
-                controller.addAxisMovedHandler(speedAxis, speedAxisMoved) # Add the handler for D-PAD control of speed
-                controller.addAxisMovedHandler(directionAxis, directionAxisMoved) # Add the handler for D-PAD control of rotation direction
-            if light_show_enabled: # if we have defined the windmill to start with the light show enabled...
-                controller.addButtonPressedHandler(lightShow1Button, lightShow1Selected) # Add the handler for selecting light show 1
-                controller.addButtonPressedHandler(lightShow2Button, lightShow2Selected) # Add the handler for selecting light show 2
-                controller.addButtonPressedHandler(lightShow3Button, lightShow3Selected) # Add the handler for selecting light show 3
-                controller.addButtonPressedHandler(lightShow4Button, lightShow4Selected) # Add the handler for selecting light show 4
-            controller.addButtonPressedHandler(lightShowToggleButton, lightShowToggle) # Add the handler for enabling/disabling the light show
-            if music_enabled: # if we have defined the windmill to start with the music playing function enabled...
-                controller.addButtonPressedHandler(musicTrackUpButton, musicTrackUp)
-                controller.addButtonPressedHandler(musicTrackDownButton, musicTrackDown)
-            controller.addButtonPressedHandler(musicToggleButton, musicToggle) # Add the handler for enabling music (which will furthur enable the handlers for selecting different tracks)
-            controller.addButtonPressedHandler(microphoneEnableButton, microphoneEnabled) # Add the handler for enabling microphone
-            controller.addButtonPressedHandler(microphoneDisableButton, microphoneDisabled) # Add the handler for disabling microphone
-            
-            system('clear')
-            main() # start the main function code
-            
-            print("Power Off") # once main quits, we know we got an exit signal from the power off button
-            reset_gpios() # set all GPIOs to low
-            controller.removeAllEventHandlers() # remove all event handlers
-            controller.addButtonPressedHandler(exitButton, exitButtonPressed) #re-add the power button event handler so that we can turn the windmill back on with the controller if we want to
-            # also, since the callbacks for keyword recognition are not part of the removed controller callbacks, we are still listening for keywords, such as switch_on
-            
-            light_show_enabled_temp = light_show_enabled # stash the current statuses of lights and music in temporary variables
-            music_enabled_temp = music_enabled
-            light_show_enabled = False # Stop the lights and music
-            music_enabled = False
-            
-            while not running: # keep checking if "running" ever gets set to true; this means power back on
-                sleep(0.3)
-            print("Power On")
-            MonitorThread.join()
+                
+                print("All threads online")
 
-            # retore the statuses of the lights and music to what they were from the temporary variables
-            music_enabled = music_enabled_temp
-            light_show_enabled = light_show_enabled_temp
+                RunOnStartup()
+                print("Creating controller update thread and setting up callback functions...")
+                controller.startBackgroundUpdates() # start the background update threads for the callbacks
+                controller.addButtonPressedHandler(toggleControlButton, toggleControlButtonPressed) # Add the handler for toggling control mode
+                controller.addButtonPressedHandler(exitButton, exitButtonPressed) # Add the handler for power on/off
+                if toggleMode: # If we have defined the windmill to start in stick control mode...
+                    controller.addAxisMovedHandler(speedDirectionStick, speedDirectionAxisMoved) # add the handler for stick control of speed and direction
+                    RPM = 0
+                else: # otherwise, it's defined to be in D-PAD control mode
+                    controller.addAxisMovedHandler(speedAxis, speedAxisMoved) # Add the handler for D-PAD control of speed
+                    controller.addAxisMovedHandler(directionAxis, directionAxisMoved) # Add the handler for D-PAD control of rotation direction
+                if light_show_enabled: # if we have defined the windmill to start with the light show enabled...
+                    controller.addButtonPressedHandler(lightShow1Button, lightShow1Selected) # Add the handler for selecting light show 1
+                    controller.addButtonPressedHandler(lightShow2Button, lightShow2Selected) # Add the handler for selecting light show 2
+                    controller.addButtonPressedHandler(lightShow3Button, lightShow3Selected) # Add the handler for selecting light show 3
+                    controller.addButtonPressedHandler(lightShow4Button, lightShow4Selected) # Add the handler for selecting light show 4
+                controller.addButtonPressedHandler(lightShowToggleButton, lightShowToggle) # Add the handler for enabling/disabling the light show
+                if music_enabled: # if we have defined the windmill to start with the music playing function enabled...
+                    controller.addButtonPressedHandler(musicTrackUpButton, musicTrackUp)
+                    controller.addButtonPressedHandler(musicTrackDownButton, musicTrackDown)
+                controller.addButtonPressedHandler(musicToggleButton, musicToggle) # Add the handler for enabling music (which will furthur enable the handlers for selecting different tracks)
+                controller.addButtonPressedHandler(microphoneEnableButton, microphoneEnabled) # Add the handler for enabling microphone
+                controller.addButtonPressedHandler(microphoneDisableButton, microphoneDisabled) # Add the handler for disabling microphone
+                controller.addButtonPressedHandler(solarToggleButton, solarToggle) # Add the handler for toggling solar power
+                
 
-        except OSError: # catch gamepad errors if disconnected
-            print("Gamepad Error ? Please plug in gamepad")
-        except IOError: # catch gamepad errors if disconnected
-            print("Gamepad Error ? Please plug in gamepad")
-        except KeyboardInterrupt: # if CTRL+C is pressed
-            print("CTRL+C Pressed")
-            running = False # setting running to false at this point means that the entire script will exit; we want to completely exit on CTRL+C
-            light_show_enabled = False # This is where we would ideally kill the light show thread and music threads
-            music_enabled = False
-        finally:
-            gpio.cleanup()  # make sure to cleanup the GPIO pins (reset them all to high-impendance inputs)
+                if KeywordThread.is_alive():
+                    STATUS_BLUE_PWM.ChangeDutyCycle(100)
+                    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+                    STATUS_RED_PWM.ChangeDutyCycle(100)
+                else:
+                    STATUS_GREEN_PWM.ChangeDutyCycle(100)
+
+                if not KeywordThread.is_alive():
+                    KeywordThread = createKeywordThread()
+
+                #system('clear')
+                main() # start the main function code
+                
+                print("Power Off") # once main quits, we know we got an exit signal from the power off button
+                reset_motor_gpios() # set all GPIOs to low
+                controller.removeAllEventHandlers() # remove all event handlers
+                controller.addButtonPressedHandler(exitButton, exitButtonPressed) #re-add the power button event handler so that we can turn the windmill back on with the controller if we want to
+                controller.addButtonPressedHandler(solarToggleButton, solarToggle) # re-add the handler for toggling solar power
+                # also, since the callbacks for keyword recognition are not part of the removed controller callbacks, we are still listening for keywords, such as switch_on
+                
+
+                perform_standby_check()
+                
+                #if not running:
+                #    MonitorThread.join()
+
+                
+
+            except OSError: # catch gamepad errors if disconnected
+                print("Gamepad Error ? Please plug in gamepad")
+            except IOError: # catch gamepad errors if disconnected
+                print("Gamepad Error ? Please plug in gamepad")
+            except KeyboardInterrupt: # if CTRL+C is pressed
+                print("CTRL+C Pressed")
+                running = False # setting running to false at this point means that the entire script will exit; we want to completely exit on CTRL+C
+                light_show_enabled = False # This is where we would ideally kill the light show thread and music threads
+                music_enabled = False
+                stop_adc = True
+                FatalError = True
+                MonitorThread.join()
+            finally:
+                controller.removeAllEventHandlers() # remove all event handlers
+                controller.disconnect() # terminate the background callback updater thread
+
+
+    gpio.cleanup()  # make sure to cleanup the GPIO pins (reset them all to high-impendance inputs)
                             # when the program is finished
-            controller.removeAllEventHandlers() # remove all event handlers
-            controller.disconnect() # terminate the background callback updater thread
-            
-
     print("Finished!")
 
     #Note: BUG discovered in pyaudio library involving creating pyaudiof instance on an asyncronous thread, leading to a segfault
