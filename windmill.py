@@ -25,11 +25,12 @@ import mcp3008
 # the path to the text file of recognized keywords (the Coral Tensorflow model is designed to work only with these)
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
+num_tracks = 10
 revision = 1.050
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
-V_REF = 4.787
+V_REF = 4.852
 solarVoltage, chargingVoltage, battVoltage, systemVoltage = [0 for i in range(4)]
 
 FatalError = False
@@ -261,12 +262,12 @@ def setup_LED_GPIOs(): # this function sets up the GPIO pins as outputs with the
     gpio.setup(STATUS_GREEN, gpio.OUT)
     gpio.setup(STATUS_BLUE, gpio.OUT)
 
-    POWER_RED_PWM = gpio.PWM(POWER_RED, 500)
-    POWER_GREEN_PWM = gpio.PWM(POWER_GREEN, 500)
-    POWER_BLUE_PWM = gpio.PWM(POWER_BLUE, 500)
-    STATUS_RED_PWM = gpio.PWM(STATUS_RED, 500)
-    STATUS_GREEN_PWM = gpio.PWM(STATUS_GREEN, 500)
-    STATUS_BLUE_PWM = gpio.PWM(STATUS_BLUE, 500)
+    POWER_RED_PWM = gpio.PWM(POWER_RED, 50)
+    POWER_GREEN_PWM = gpio.PWM(POWER_GREEN, 50)
+    POWER_BLUE_PWM = gpio.PWM(POWER_BLUE, 50)
+    STATUS_RED_PWM = gpio.PWM(STATUS_RED, 50)
+    STATUS_GREEN_PWM = gpio.PWM(STATUS_GREEN, 50)
+    STATUS_BLUE_PWM = gpio.PWM(STATUS_BLUE, 50)
 
     gpio.output(SOLAR_LED, 0)
     POWER_RED_PWM.start(0)
@@ -496,7 +497,7 @@ def musicTrackUp(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
     if music_enabled: # sanity check that the music is actually enabled
-        music_track = ((music_track) % 10) + 1 # If music track goes outside the bounds of 1-8, mod 8 and add 1 to fix
+        music_track = ((music_track) % num_tracks) + 1 # If music track goes outside the bounds of 1 to # of tracks, mod num_tracks and add 1 to fix
         print(f"Music track up | Now playing track {music_track}")
         updateMusicStatus(music_track)
 
@@ -504,7 +505,7 @@ def musicTrackDown(): # The callback function for incrementing the music track
 
     global music_track # Use the global variable
     if music_enabled: # sanity check that the music is actually enabled
-        music_track = ((music_track - 2) % 10) + 1 # If music track goes outside the bounds of 1-8, subtract 2, mod 8 and add 1 to fix
+        music_track = ((music_track - 2) % num_tracks) + 1 # If music track goes outside the bounds of 1 to # of tracks, subtract 2, mod num_tracks and add 1 to fix
         print(f"Music track down | Now playing track {music_track}")
         updateMusicStatus(music_track)
 
@@ -689,7 +690,7 @@ def ReadADCWorker():
         
         if solarVoltage > 3.7:
             gpio.output(SOLAR_LED, 1)
-        else:
+        elif solarVoltage <= 3.7:
             gpio.output(SOLAR_LED, 0)
             if solar_only and running:
                 running = False
@@ -704,21 +705,24 @@ def ReadADCWorker():
             battVoltages.pop()
         
         ClearPowerLight()
+        
         if chargingVoltage > 3.7:
+            if battVoltages[0] >= 4.200:
+                    POWER_BLUE_PWM.ChangeDutyCycle(100)
+                    POWER_GREEN_PWM.ChangeDutyCycle(10)
             
             for voltage in range(len(battVoltages)):
-                if battVoltages[voltage] <= 4.2:
+                if battVoltages[voltage] < 4.200:
+                    ClearPowerLight()
                     POWER_RED_PWM.ChangeDutyCycle(100)
                     POWER_GREEN_PWM.ChangeDutyCycle(10)
                     break
-                if voltage == 4:
-                    POWER_BLUE_PWM.ChangeDutyCycle(100)
-                    POWER_GREEN_PWM.ChangeDutyCycle(10)
+               
 
-            
-                
-        elif battVoltage < 2.55:
+        elif battVoltage < 3.25:
             POWER_RED_PWM.ChangeDutyCycle(100)
+                
+        
 
 
         sleep(0.3)
@@ -744,8 +748,9 @@ def perform_standby_check(): # This function will block as long as standby is ac
 
     if MusicThread is not None:
         updateMusicStatus(music_track)
-    ClearStatusLight()
-    while not running or systemVoltage < 4 or (solar_only and solarVoltage < 3.7): # keep checking if "running" ever gets set to true; this means power back on
+    
+    while not running or systemVoltage < 4 or (solar_only and (solarVoltage < 3.7)): # keep checking if "running" ever gets set to true; this means power back on
+        ClearStatusLight()
         if systemVoltage < 4:
             for i in range(0, 101):
                 STATUS_RED_PWM.ChangeDutyCycle(i)
@@ -753,7 +758,7 @@ def perform_standby_check(): # This function will block as long as standby is ac
             for i in range(0, 101):
                 STATUS_RED_PWM.ChangeDutyCycle(100 - i)
                 sleep(0.005)
-        elif solar_only and solarVoltage < 3.7:
+        elif solar_only and (solarVoltage < 3.7):
             for i in range(0, 100):
                 STATUS_RED_PWM.ChangeDutyCycle(i)
                 STATUS_GREEN_PWM.ChangeDutyCycle(10 * math.exp(i/25 - 4))
