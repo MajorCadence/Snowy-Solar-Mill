@@ -352,12 +352,12 @@ def speedDirectionAxisMoved(new_position: int): # The callback function for the 
         
             if new_position == abs(new_position): # If the stick position is positive, then our direction is counter-clockwise
             
-                new_direction = 0 # update the global new_direction variable
+                new_direction = 1 # update the global new_direction variable, (reversed because of gear system)
                 print(f"Direction control updated | Rotation clockwise")
                 
             else: # otherwise, the stick position must be negative
             
-                new_direction = 1 # set the new_direction to be clockwise
+                new_direction = 0 # set the new_direction to be clockwise, (reversed because of gear system)
                 print(f"Direction control updated | Rotation counter-clockwise")
 
 
@@ -417,12 +417,12 @@ def directionAxisMoved(change: int): # The callback function for the speed axis 
     if not toggleMode: # sanity check that the current control mode is D-PAD control
         if change > 0: # If the value is positive (D-PAD) right
         
-            new_direction = 1 # rotate clockwise
+            new_direction = 0 # rotate clockwise, (reversed because of gear system)
             print("Direction set to clockwise")
             
         elif change < 0: # Otherwise, if the value is negative (D-PAD) left
         
-            new_direction = 0 # rotate counter-clockwise
+            new_direction = 1 # rotate counter-clockwise, (reversed because of gear system)
             print("Direction set to counter-clockwise")
 
 def lightShow1Selected(): # The callback function for selecting light show #1
