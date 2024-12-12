@@ -13,6 +13,7 @@ import math # import for math functions
 import threading # import for multithreading
 import pyaudio
 import wave
+import subprocess
 from os import system # import system call for various uses
 from os import listdir, path
 #import faulthandler # import for debugging segfaults
@@ -431,6 +432,7 @@ def lightShow1Selected(): # The callback function for selecting light show #1
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 1 selected')
         light_show = 1 # set the light show number to 1
+        updateLightShow()
 
 def lightShow2Selected(): # The callback function for selecting light show #2
 
@@ -438,6 +440,7 @@ def lightShow2Selected(): # The callback function for selecting light show #2
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 2 selected')
         light_show = 2 # set the light show number to 2
+        updateLightShow()
 
 def lightShow3Selected(): # The callback function for selecting light show #3
 
@@ -445,6 +448,7 @@ def lightShow3Selected(): # The callback function for selecting light show #3
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 3 selected')
         light_show = 3 # set the light show number to 3
+        updateLightShow()
 
 def lightShow4Selected(): # The callback function for selecting light show #4
 
@@ -452,6 +456,7 @@ def lightShow4Selected(): # The callback function for selecting light show #4
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 4 selected')
         light_show = 4 # set the light show number to 4
+        updateLightShow()
 
 def lightShowToggle(): # The callback function for enabling/disabling the light show
 
@@ -473,6 +478,7 @@ def lightShowToggle(): # The callback function for enabling/disabling the light 
         controller.removeButtonPressedHandler(lightShow4Button, lightShow4Selected)
         
     print(f'Light show is enabled {light_show_enabled}')
+    updateLightShow()
 
 def musicToggle(): # The callback function for toggling the music
 
@@ -677,6 +683,24 @@ def updateMusicStatus(musictrack : int):
         #print("Starting new music thread")
         MusicThread.start()
 
+def updateLightShow(lightshow : int):
+
+    global light_show_enabled
+
+    if light_show_enabled:
+        if LightProcess is not None:
+            if LightProcess.poll() is None:
+                LightProcess.terminate()
+            LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', str(lightshow)])
+        else:
+            LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', str(lightshow)])
+    else:
+        if LightProcess is not None:
+            if LightProcess.poll() is None:
+                LightProcess.terminate()
+                LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', '0'])     
+
+
 def ReadADCWorker():
     battVoltages = []
     gpio.setmode(gpio.BCM)
@@ -748,6 +772,8 @@ def perform_standby_check(): # This function will block as long as standby is ac
 
     if MusicThread is not None:
         updateMusicStatus(music_track)
+    if LightProcess is not None:
+        updateLightShow(light_show)
     
     while not running or systemVoltage < 4 or (solar_only and (solarVoltage < 3.7)): # keep checking if "running" ever gets set to true; this means power back on
         ClearStatusLight()
@@ -821,6 +847,7 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
     KeywordThread = createKeywordThread()
     running = True
     MusicThread = None
+    LightProcess = None
     controller = None
     perform_standby_check()
     while not FatalError:
@@ -842,7 +869,9 @@ if __name__ == "__main__": # are we running as a script ? This is the check that
                 MusicThread = threading.Thread(target=TrackPlayerWorker, args=[1])
                 updateMusicStatus(music_track)
 
-                
+                print("Initializing Light Show System")
+                updateLightShow(light_show)
+
                 print("All threads online")
 
                 RunOnStartup()

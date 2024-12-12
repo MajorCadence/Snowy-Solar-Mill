@@ -19,7 +19,13 @@ small_sleep_time = 0.05
 medium_sleep_time = 0.15
 extra_long_sleep_time = 0.75
 
+def ClearLight():
+    for i in range(LED_COUNT):
+            strip.setPixelColor(i, Color(0, 0, 0))
+            strip.show()
+
 def LightShow1():
+    print("Running light show 1")
     while True:
         effect = rand.randint(9,9)
         colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
@@ -208,6 +214,7 @@ def LightShow1():
                 sleep(medium_sleep_time)
 
 def LightShow2():
+    print("Running light show 2")
     while True:
         effect = rand.randint(10,10)
         LEDs = [x for x in range(LED_COUNT)]
@@ -321,7 +328,9 @@ if __name__ == "__main__":
     strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
     strip.begin()
     try:
-        if args.get('number') == '1':
+        if args.get('number') == '0':
+            ClearLight()
+        elif args.get('number') == '1':
             LightShow1()
         elif args.get('number') == '2':
             LightShow2()
