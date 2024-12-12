@@ -14,6 +14,7 @@ import threading # import for multithreading
 import pyaudio
 import wave
 import subprocess
+import psutil
 from os import system # import system call for various uses
 from os import listdir, path
 #import faulthandler # import for debugging segfaults
@@ -432,7 +433,7 @@ def lightShow1Selected(): # The callback function for selecting light show #1
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 1 selected')
         light_show = 1 # set the light show number to 1
-        updateLightShow()
+        updateLightShow(light_show)
 
 def lightShow2Selected(): # The callback function for selecting light show #2
 
@@ -440,7 +441,7 @@ def lightShow2Selected(): # The callback function for selecting light show #2
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 2 selected')
         light_show = 2 # set the light show number to 2
-        updateLightShow()
+        updateLightShow(light_show)
 
 def lightShow3Selected(): # The callback function for selecting light show #3
 
@@ -448,7 +449,7 @@ def lightShow3Selected(): # The callback function for selecting light show #3
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 3 selected')
         light_show = 3 # set the light show number to 3
-        updateLightShow()
+        updateLightShow(light_show)
 
 def lightShow4Selected(): # The callback function for selecting light show #4
 
@@ -456,7 +457,7 @@ def lightShow4Selected(): # The callback function for selecting light show #4
     if light_show_enabled: # sanity check that the light show is actually enabled
         print('Light show 4 selected')
         light_show = 4 # set the light show number to 4
-        updateLightShow()
+        updateLightShow(light_show)
 
 def lightShowToggle(): # The callback function for enabling/disabling the light show
 
@@ -478,7 +479,7 @@ def lightShowToggle(): # The callback function for enabling/disabling the light 
         controller.removeButtonPressedHandler(lightShow4Button, lightShow4Selected)
         
     print(f'Light show is enabled {light_show_enabled}')
-    updateLightShow()
+    updateLightShow(light_show)
 
 def musicToggle(): # The callback function for toggling the music
 
@@ -685,21 +686,29 @@ def updateMusicStatus(musictrack : int):
 
 def updateLightShow(lightshow : int):
 
-    global light_show_enabled
+    global light_show_enabled, LightProcess
 
     if light_show_enabled:
         if LightProcess is not None:
-            if LightProcess.poll() is None:
-                LightProcess.terminate()
+            LightProcess.poll()
+            if LightProcess.returncode is None:
+                for proc in psutil.process_iter():
+                    #print(proc.cmdline())
+                    if 'led_shows.py' in proc.cmdline():
+                        subprocess.Popen(['sudo', 'kill', str(proc.pid)])
             LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', str(lightshow)])
         else:
-            LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', str(lightshow)])
+            LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', str(lightshow)], shell=False)
     else:
         if LightProcess is not None:
-            if LightProcess.poll() is None:
-                LightProcess.terminate()
-                LightProcess = subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', '0'])     
-
+            LightProcess.poll()
+            if LightProcess.returncode is None:
+                for proc in psutil.process_iter():
+                    #print(proc.cmdline())
+                    if 'led_shows.py' in proc.cmdline():
+                        subprocess.Popen(['sudo', 'kill', str(proc.pid)])
+                subprocess.Popen(['sudo', 'python', 'led_shows.py', '-n', '0'], shell=False).wait()
+    
 
 def ReadADCWorker():
     battVoltages = []
