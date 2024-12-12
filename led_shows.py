@@ -15,153 +15,204 @@ ARM_COUNT = round(LED_COUNT / 4)
 import random as rand
 rand.seed()
 
+small_sleep_time = 0.05
+medium_sleep_time = 0.15
+extra_long_sleep_time = 0.75
+
 def LightShow1():
     while True:
-        effect = rand.randint(1,4)
+        effect = rand.randint(9,9)
         colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
         if effect == 1:
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*ARM_COUNT + j, Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*ARM_COUNT+ j, Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*ARM_COUNT + (ARM_COUNT - j - 1), Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*ARM_COUNT+ (ARM_COUNT - j - 1), Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
         if effect == 2:
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + j, Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + j + ARM_COUNT, Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + j, Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + j + ARM_COUNT, Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + (ARM_COUNT - j - 1), Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + ARM_COUNT + (ARM_COUNT - j - 1), Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + (ARM_COUNT - j - 1), Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(2):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(i*2*ARM_COUNT + ARM_COUNT + (ARM_COUNT - j - 1), Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
         if effect == 3:
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(LED_COUNT -1 - (i*ARM_COUNT + j), Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(LED_COUNT -1 - (i*ARM_COUNT+ j), Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(LED_COUNT - 1 - (i*ARM_COUNT + (ARM_COUNT - j - 1)), Color(colorR, colorG, colorB))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
             for i in range(4):
                 for j in range(int(ARM_COUNT)):
                     strip.setPixelColor(LED_COUNT - 1 - (i*ARM_COUNT+ (ARM_COUNT - j - 1)), Color(0, 0, 0))
-                    sleep(0.035)
+                    sleep(small_sleep_time)
                     strip.show()
         if effect == 4:
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT - 1 - j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT - 1 - j, Color(0, 0, 0))
                 strip.setPixelColor(ARM_COUNT*2 + j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*2 + j, Color(0, 0, 0))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*2 - 1 - j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*2 - 1 - j, Color(0, 0, 0))
                 strip.setPixelColor(ARM_COUNT*3 + j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*3 + j, Color(0, 0, 0))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*4 - 1 - j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*4 - 1 - j, Color(0, 0, 0))
                 strip.setPixelColor(ARM_COUNT + j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT + j, Color(0, 0, 0))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*3 - 1 - j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(ARM_COUNT*3 - 1 - j, Color(0, 0, 0))
                 strip.setPixelColor(j, Color(colorR, colorG, colorB))
                 strip.show()
-                sleep(0.035)
+                sleep(small_sleep_time)
             for j in range(int(ARM_COUNT)):
                 strip.setPixelColor(j, Color(0, 0, 0))
                 strip.show()
-                sleep(0.035)
-    
+                sleep(small_sleep_time)
+        if effect == 5:
+            for i in range(4):
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(i*ARM_COUNT + j, Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time)
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(i*ARM_COUNT + j, Color(0, 0, 0))
+                    strip.show()
+                    sleep(small_sleep_time)
+        if effect == 6:
+            for i in range(4):
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(LED_COUNT - 1 - (i*ARM_COUNT + (ARM_COUNT - j - 1)), Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time)
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(LED_COUNT - 1 - (i*ARM_COUNT + (ARM_COUNT - j - 1)), Color(0, 0, 0))
+                    strip.show()
+                    sleep(small_sleep_time)
+        if effect == 7:
+            for i in range(4):
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(LED_COUNT -1 - (i*ARM_COUNT + j), Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time)
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(LED_COUNT -1 - (i*ARM_COUNT + j), Color(0, 0, 0))
+                    strip.show()
+                    sleep(small_sleep_time)
+        if effect == 8:
+            for i in range(4):
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(i*ARM_COUNT+ (ARM_COUNT - j - 1), Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time)
+                for j in range(int(ARM_COUNT)):
+                    strip.setPixelColor(i*ARM_COUNT+ (ARM_COUNT - j - 1), Color(0, 0, 0))
+                    strip.show()
+                    sleep(small_sleep_time)
+        if effect == 9:
+            for i in range(35):
+                for j in range(LED_COUNT):
+                    strip.setPixelColor(j, Color(colorR, colorG, colorB))
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                strip.show()
+                sleep(medium_sleep_time)
 
 def LightShow2():
     while True:
-        effect = rand.randint(1,4)
+        effect = rand.randint(10,10)
         LEDs = [x for x in range(LED_COUNT)]
         rand.shuffle(LEDs)
+        colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
         if effect == 1:
             for j in range(5):
                 colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
@@ -190,7 +241,77 @@ def LightShow2():
                     strip.setPixelColor(i, Color(colorR, colorG, colorB))
                     sleep(0.05)
                 strip.show()
-                
+        if effect == 5:
+            for j in range(3):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(LED_COUNT):
+                    strip.setPixelColor(LEDs[i], Color(0, 0, 0))
+                strip.show()
+                for i in range(LED_COUNT):
+                    strip.setPixelColor(LEDs[i], Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(0.05)
+                strip.show()
+                rand.shuffle(LEDs)
+                for i in range(LED_COUNT):
+                    strip.setPixelColor(LEDs[i], Color(0, 0, 0))
+                    strip.show()
+                    sleep(0.05)
+        if effect == 6:
+            for k in range(5):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(4):
+                    for j in range(i*ARM_COUNT, (i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(medium_sleep_time)
+                    for j in range(i*ARM_COUNT, (i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(0, 0, 0))
+                    strip.show()
+                    sleep(medium_sleep_time)
+        if effect == 7:
+            for k in range(10):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(4):
+                    for j in range(i*ARM_COUNT, (i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time*2)
+                    for j in range(i*ARM_COUNT, (i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(0, 0, 0))
+        if effect == 8:
+            for k in range(5):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(4):
+                    for j in range((3-i)*ARM_COUNT, (3 - i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(medium_sleep_time)
+                    for j in range((3-i)*ARM_COUNT, (3 - i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(0, 0, 0))
+                    strip.show()
+                    sleep(medium_sleep_time)
+        if effect == 9:
+            for k in range(10):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(4):
+                    for j in range((3-i)*ARM_COUNT, (3 - i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(colorR, colorG, colorB))
+                    strip.show()
+                    sleep(small_sleep_time*2)
+                    for j in range((3-i)*ARM_COUNT, (3 - i + 1) * ARM_COUNT):
+                        strip.setPixelColor(j, Color(0, 0, 0))
+        if effect == 10:
+            for j in range(5):
+                colorR, colorG, colorB = (round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1, round(254/2)*rand.randint(0,2) + 1)
+                for i in range(LED_COUNT):
+                    strip.setPixelColor(i, Color(colorR, colorG, colorB))
+                strip.show()
+                sleep(extra_long_sleep_time)
+                for i in range(LED_COUNT):
+                    strip.setPixelColor(i, Color(0, 0, 0))
+                strip.show()
+                sleep(extra_long_sleep_time) 
 
 
 if __name__ == "__main__":
