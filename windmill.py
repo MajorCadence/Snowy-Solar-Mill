@@ -1,4 +1,4 @@
-# Yuletide Twister Rev 1.017
+# Yuletide Twister Rev 1.1
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
@@ -28,7 +28,7 @@ import mcp3008
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
 num_tracks = 10
-revision = 1.050
+revision = 1.101
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
@@ -60,8 +60,8 @@ microphoneDisableButton = 'RT' # The right trigger will disable (mute) the micro
 
 pause_time = 0 # The time interval between half setp rotations -> This is overwritten from the calculated RPM on start-up
 RPM = 10 # The the default RPM to begin
-max_rpm_limit_step_mode = 100 # The is the max RPM limit for the "D-PAD" control mode
-max_rpm_limit_stick_mode = 25 # This is the max RPM limit for the "stick" control mode
+max_rpm_limit_step_mode = 110 # The is the max RPM limit for the "D-PAD" control mode
+max_rpm_limit_stick_mode = 20 # This is the max RPM limit for the "stick" control mode
 clockwise = 0 # Begin with a counter-clockwise rotation [0=counter-clockwise, 1=clockwise]
 new_direction = 0 # The new direction we should rotate (set to 0 for now)
 rowQ = 0x1 # The very first row of the rotation truth table (0 0 0 1) in the form (a1, b1, a2, b2)
@@ -392,22 +392,22 @@ def speedAxisMoved(change: int): # The callback function for the speed axis (D-P
     if not toggleMode: # sanity check that the current control mode is D-PAD control
         if change < 0: # If the value is negative (D-PAD up)
         
-            pause_time /= 1.3 # divide the current pause_time (increase speed) by 1.3 (arbitrary value)
+            pause_time /= 1.5 # divide the current pause_time (increase speed) by 1.5 (arbitrary value)
             calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
             
             if RPM > max_rpm_limit_step_mode: # if the RPM is now above our maximum limits
-                pause_time *= 1.3 # then revert it
+                pause_time *= 1.5 # then revert it
                 calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
                 
             print(f"Speed inreased | New RPM {RPM}")
             
         elif change > 0: # Otherwise, if the value is positive (D-PAD down)
         
-            pause_time *= 1.3 # multiply the current pause_time (decrease speed) by 1.3 (arbitrary value)
+            pause_time *= 1.5 # multiply the current pause_time (decrease speed) by 1.5 (arbitrary value)
             calculate_motor_RPM_from_timestep(pause_time) # calculate (and set) the new motor RPM from this new timestep
             
             if RPM < 1: # if the RPM is now below that previously imposed maximum pause_time value of 1 (at "0" RPM)
-                pause_time /= 1.3 # then revert it; we don't want it too slow or the program will feel sluggish to respond
+                pause_time /= 1.5 # then revert it; we don't want it too slow or the program will feel sluggish to respond
                 calculate_motor_RPM_from_timestep(pause_time) # and calculate the old RPM
                 
             print(f"Speed decreased | New RPM {RPM}")
