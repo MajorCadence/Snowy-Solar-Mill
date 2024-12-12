@@ -621,7 +621,7 @@ def perform_action_from_keyword(keyword): # this function takes in a detected ke
         action_mapping_args =   {
                                 'turn_up': (speedAxisMoved, -1), 'turn_down': (speedAxisMoved, 1),
                                 'turn_left': (directionAxisMoved, -1), 'turn_right': (directionAxisMoved, 1),
-                                'reverse': (directionAxisMoved, -1 if clockwise else 1)
+                                'reverse': (directionAxisMoved, -1 if not clockwise else 1)
                                 }
         
         # This is another dictionary mapping valid detecable keyword strings with a callable function object
