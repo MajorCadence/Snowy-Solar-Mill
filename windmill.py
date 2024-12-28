@@ -1,4 +1,4 @@
-# Yuletide Twister Rev 1.1
+# Yuletide Twister Rev 1.104
 # Made with love by Jennifer, Sara, and Connor
 # William and Mary - SI Lab 2024 for Prof. Ran Yang
 
@@ -28,7 +28,7 @@ import mcp3008
 path_to_recognized_words = "./project-keyword-spotter/config/labels_gc2.raw.txt"
 audiopath = './AudioTracks'
 num_tracks = 10
-revision = 1.101
+revision = 1.104
 
 is_debug = False # set to true to process debugging information
 steps_per_rev = 200 # Adjusted for a NEMA17: the stepper has 200 steps per revolution
@@ -60,7 +60,7 @@ microphoneDisableButton = 'RT' # The right trigger will disable (mute) the micro
 
 pause_time = 0 # The time interval between half setp rotations -> This is overwritten from the calculated RPM on start-up
 RPM = 10 # The the default RPM to begin
-max_rpm_limit_step_mode = 110 # The is the max RPM limit for the "D-PAD" control mode
+max_rpm_limit_step_mode = 90 # The is the max RPM limit for the "D-PAD" control mode
 max_rpm_limit_stick_mode = 20 # This is the max RPM limit for the "stick" control mode
 clockwise = 0 # Begin with a counter-clockwise rotation [0=counter-clockwise, 1=clockwise]
 new_direction = 0 # The new direction we should rotate (set to 0 for now)
@@ -69,7 +69,7 @@ rowR = 0x3 # The next row at one half step later (0 0 1 1) in the form (a1, a2, 
 running = True # Whether or not the system is powered on (True)
 stop_adc = False
 toggleMode = 0 # The control mode we are currently in (0=DPAD mode, 1=Stick mode)
-light_show_enabled = True # Start with the light show enabled
+light_show_enabled = False # Start with the light show enabled
 light_show = 1 # Start with the light show set to #1
 music_enabled = False # Start with the music disabled
 music_track = 1 # The music track will be set to the first track
@@ -382,7 +382,7 @@ def toggleControlButtonPressed(): # The callback function for the control mode t
         controller.addAxisMovedHandler(speedAxis, speedAxisMoved)
         controller.addAxisMovedHandler(directionAxis, directionAxisMoved)
         
-        calculate_motor_time_step_from_RPM(0.5*max_rpm_limit_step_mode) # reset the speed by directly calculating a new timestep from an RPM of half the maximum for step mode
+        calculate_motor_time_step_from_RPM(0.15*max_rpm_limit_step_mode) # reset the speed by directly calculating a new timestep from an RPM of half the maximum for step mode
         print("Toggling control mode | D-PAD control")
         
 
@@ -712,6 +712,7 @@ def updateLightShow(lightshow : int):
 
 def ReadADCWorker():
     battVoltages = []
+    solarVoltages = []
     gpio.setmode(gpio.BCM)
     global running
     
@@ -721,14 +722,19 @@ def ReadADCWorker():
         solarVoltage, chargingVoltage, battVoltage, systemVoltage = adc.read_all(V_REF)[12:]
         #print("Current voltages:", solarVoltage, chargingVoltage, battVoltage, systemVoltage)
         
+        solarVoltages.insert(0, solarVoltage)
+        if len(solarVoltages) > 5:
+            solarVoltages.pop()
+
         if solarVoltage > 3.7:
             gpio.output(SOLAR_LED, 1)
         elif solarVoltage <= 3.7:
-            gpio.output(SOLAR_LED, 0)
-            if solar_only and running:
-                running = False
-                sleep(1)
-                running = True
+            if all(flag < 3.7 for flag in solarVoltages):
+                gpio.output(SOLAR_LED, 0)
+                if solar_only and running:
+                    running = False
+                    sleep(1)
+                    running = True
         
         if systemVoltage < 4:
             running = False
